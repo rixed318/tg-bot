@@ -24,6 +24,7 @@ from tg_bot.config import (
     MONTAGE_SCRIPT,
     PHOTO_SUFFIXES,
     RCLONE_BIN,
+    REPLY_MODEL,
     RIXED_MUSIC_VENV_PY,
     STICKER_GIF_SCRIPT,
     VIDEO_SUFFIXES,
@@ -280,6 +281,8 @@ def generate_image(image_prompt: str, work_dir: Path) -> Path:
     subprocess.run(
         [
             str(AGY_BIN),
+            "--model",
+            REPLY_MODEL,
             "--output-format",
             "json",
             "--dangerously-skip-permissions",

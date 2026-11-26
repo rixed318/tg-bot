@@ -14,6 +14,7 @@ from tg_bot.config import (
     AGY_BIN,
     GROUP_COOLDOWN_SECONDS,
     INLINE_HISTORY_LIMIT,
+    TRIGGER_MODEL,
     read_bot_username,
 )
 
@@ -270,10 +271,10 @@ def evaluate_trigger(
     command = [
         str(AGY_BIN),
         "--dangerously-skip-permissions",
+        "--model",
+        TRIGGER_MODEL,
         "--output-format",
         "json",
-        "--effort",
-        "low",
         "--print-timeout",
         "90s",
         f"--print={classifier_prompt}",
