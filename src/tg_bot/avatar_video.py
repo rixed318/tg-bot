@@ -187,10 +187,10 @@ def _load_sprite_frames(
     return {"closed": closed, "half": half, "open": open_f, "blink": blink}
 
 
-def compute_mouth_states(
+def compute_smoothed_envelope(
     audio_path: Path, *, fps: int = AVATAR_FPS
-) -> tuple[list[str], float]:
-    """Analyze audio RMS envelope per frame to drive mouth open/half/closed + blinks."""
+) -> tuple[list[float], list[str], float]:
+    """Analyze audio RMS envelope with attack/release smoothing for fluid lip-sync."""
     data, sr = sf.read(str(audio_path), dtype="float32", always_2d=False)
     if getattr(data, "ndim", 1) > 1:
         data = data.mean(axis=1)
@@ -210,24 +210,98 @@ def compute_mouth_states(
             chunk = data[start:end]
             rms_values.append(float(np.sqrt(np.mean(chunk * chunk))))
 
-    peak = max(rms_values) if rms_values else 0.0
-    low_thr = max(0.008, peak * 0.14)
-    high_thr = max(0.025, peak * 0.42)
+    non_zero = [v for v in rms_values if v > 1e-5]
+    ref_peak = float(np.percentile(non_zero, 95)) if non_zero else 0.0
+    ref_peak = max(ref_peak, 0.03)
+    noise_floor = max(0.005, ref_peak * 0.08)
+
+    smoothed: list[float] = []
+    prev = 0.0
+    for rms in rms_values:
+        norm = max(0.0, min(1.0, (rms - noise_floor) / max(1e-5, ref_peak - noise_floor)))
+        alpha = 0.58 if norm >= prev else 0.32
+        cur = prev + alpha * (norm - prev)
+        smoothed.append(cur)
+        prev = cur
 
     states: list[str] = []
-    blink_period = int(fps * 3.2)
-    for i, rms in enumerate(rms_values):
-        if rms < low_thr:
-            # Periodic natural blink during pauses
-            if blink_period > 0 and 0 <= (i % blink_period) <= 2:
+    blink_period = int(fps * 3.4)
+    for i, level in enumerate(smoothed):
+        phase = i % blink_period if blink_period > 0 else -1
+        if level < 0.12:
+            if 0 <= phase <= 3:
                 states.append("blink")
             else:
                 states.append("closed")
-        elif rms < high_thr:
+        elif level < 0.48:
             states.append("half")
         else:
             states.append("open")
+    return smoothed, states, duration
+
+
+def compute_mouth_states(
+    audio_path: Path, *, fps: int = AVATAR_FPS
+) -> tuple[list[str], float]:
+    """Analyze audio RMS envelope per frame to drive mouth open/half/closed + blinks."""
+    _, states, duration = compute_smoothed_envelope(audio_path, fps=fps)
     return states, duration
+
+
+def _blend_mouth_frame(
+    sprites: dict[str, np.ndarray], level: float, blink_weight: float
+) -> np.ndarray:
+    """Smoothly blend closed/half/open/blink sprites from continuous energy level."""
+    lvl = max(0.0, min(1.0, level))
+    if lvl < 0.5:
+        t = lvl / 0.5
+        a, b = sprites["closed"], sprites["half"]
+    else:
+        t = (lvl - 0.5) / 0.5
+        a, b = sprites["half"], sprites["open"]
+
+    blended = a.astype(np.float32) * (1.0 - t) + b.astype(np.float32) * t
+    if blink_weight > 0.01:
+        bw = max(0.0, min(1.0, blink_weight))
+        blended = blended * (1.0 - bw) + sprites["blink"].astype(np.float32) * bw
+    return np.clip(blended, 0, 255).astype(np.uint8)
+
+
+def _apply_smooth_motion(
+    frame: np.ndarray,
+    *,
+    t_sec: float,
+    energy: float,
+    emotion: str,
+    size: int,
+) -> bytes:
+    """Apply subtle overscanned breathing, sway, and speech nod with zero border gaps."""
+    emo_bounce = 1.35 if emotion in ("happy", "laugh") else (0.7 if emotion == "sad" else 1.0)
+    scale = 1.025 + 0.006 * math.sin(2.0 * math.pi * 0.35 * t_sec) + 0.012 * energy * emo_bounce
+    dx = 2.0 * math.sin(2.0 * math.pi * 0.42 * t_sec)
+    dy = (
+        1.2 * math.sin(2.0 * math.pi * 0.84 * t_sec)
+        - 2.6 * energy * emo_bounce
+    )
+
+    cx = size * 0.5
+    cy = size * 0.5
+    inv_scale = 1.0 / scale
+    a = inv_scale
+    b = 0.0
+    c = cx - inv_scale * (cx + dx)
+    d = 0.0
+    e = inv_scale
+    f = cy - inv_scale * (cy + dy)
+
+    pil_img = Image.fromarray(frame, mode="RGB")
+    moved = pil_img.transform(
+        (size, size),
+        Image.Transform.AFFINE,
+        (a, b, c, d, e, f),
+        resample=Image.Resampling.BILINEAR,
+    )
+    return moved.tobytes()
 
 
 def render_talking_avatar_mp4(
@@ -242,11 +316,7 @@ def render_talking_avatar_mp4(
     """Render a square H.264/AAC talking-avatar MP4 suitable for Telegram sendVideoNote."""
     output_mp4.parent.mkdir(parents=True, exist_ok=True)
     sprites = _load_sprite_frames(avatar_dir, emotion, size=size)
-    states, duration = compute_mouth_states(audio_path, fps=fps)
-
-    # Pre-compute slight 3px upward bounce frame for loud 'open' syllables
-    open_bounce = np.roll(sprites["open"], -3, axis=0)
-    open_bounce[-3:, :, :] = sprites["open"][-1:, :, :]
+    levels, states, duration = compute_smoothed_envelope(audio_path, fps=fps)
 
     cmd = [
         FFMPEG_BIN,
@@ -294,12 +364,17 @@ def render_talking_avatar_mp4(
     )
     assert proc.stdin is not None
     try:
-        for idx, state in enumerate(states):
-            if state == "open" and (idx % 2 == 0):
-                frame = open_bounce
-            else:
-                frame = sprites.get(state, sprites["closed"])
-            proc.stdin.write(frame.tobytes())
+        for idx, (level, state) in enumerate(zip(levels, states)):
+            blink_w = 1.0 if state == "blink" else 0.0
+            blended = _blend_mouth_frame(sprites, level, blink_w)
+            raw_bytes = _apply_smooth_motion(
+                blended,
+                t_sec=idx / max(1, fps),
+                energy=level,
+                emotion=emotion,
+                size=size,
+            )
+            proc.stdin.write(raw_bytes)
         proc.stdin.close()
     except BrokenPipeError:
         pass
