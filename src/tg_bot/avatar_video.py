@@ -159,32 +159,53 @@ def resolve_avatar_dir(
 def _load_sprite_frames(
     avatar_dir: Path, emotion: str, size: int = AVATAR_SIZE
 ) -> dict[str, np.ndarray]:
-    """Load RGB numpy arrays for closed/half/open/blink states with clean fallbacks."""
+    """Load RGB numpy arrays for closed/half/open/blink + optional wink/brows_up."""
     emo = emotion if emotion in EMOTIONS else "neutral"
+
+    def _load_img(path: Path) -> np.ndarray:
+        with Image.open(path) as im:
+            rgb = im.convert("RGB")
+            if rgb.size != (size, size):
+                resample = (
+                    Image.Resampling.NEAREST
+                    if rgb.width <= 128
+                    else Image.Resampling.LANCZOS
+                )
+                rgb = rgb.resize((size, size), resample=resample)
+            return np.asarray(rgb, dtype=np.uint8)
 
     def _pick(state: str, fallbacks: list[str]) -> np.ndarray:
         candidates = [f"{emo}_{state}.png", f"neutral_{state}.png", *fallbacks]
         for fname in candidates:
             path = avatar_dir / fname
             if path.is_file():
-                with Image.open(path) as im:
-                    rgb = im.convert("RGB")
-                    if rgb.size != (size, size):
-                        # Use NEAREST to preserve crisp pixel art edges if upscaling
-                        resample = (
-                            Image.Resampling.NEAREST
-                            if rgb.width <= 128
-                            else Image.Resampling.LANCZOS
-                        )
-                        rgb = rgb.resize((size, size), resample=resample)
-                    return np.asarray(rgb, dtype=np.uint8)
+                return _load_img(path)
         return np.asarray(_draw_pixel_avatar_sprite(emo, state, size), dtype=np.uint8)
+
+    def _pick_optional(candidates: list[str]) -> np.ndarray | None:
+        for fname in candidates:
+            path = avatar_dir / fname
+            if path.is_file():
+                return _load_img(path)
+        return None
 
     closed = _pick("closed", [f"{emo}_open.png", "neutral_closed.png"])
     open_f = _pick("open", [f"{emo}_closed.png", "neutral_open.png"])
     half = _pick("half", [f"{emo}_open.png", "neutral_half.png", "neutral_open.png"])
     blink = _pick("blink", [f"{emo}_closed.png", "neutral_blink.png", "neutral_closed.png"])
-    return {"closed": closed, "half": half, "open": open_f, "blink": blink}
+    frames: dict[str, np.ndarray] = {
+        "closed": closed,
+        "half": half,
+        "open": open_f,
+        "blink": blink,
+    }
+    wink = _pick_optional([f"{emo}_wink.png", "neutral_wink.png"])
+    if wink is not None:
+        frames["wink"] = wink
+    brows_up = _pick_optional([f"{emo}_brows_up.png", "brows_up_open.png", "neutral_brows_up.png"])
+    if brows_up is not None:
+        frames["brows_up"] = brows_up
+    return frames
 
 
 def compute_smoothed_envelope(
@@ -249,9 +270,13 @@ def compute_mouth_states(
 
 
 def _blend_mouth_frame(
-    sprites: dict[str, np.ndarray], level: float, blink_weight: float
+    sprites: dict[str, np.ndarray],
+    level: float,
+    blink_weight: float,
+    wink_weight: float = 0.0,
+    brows_weight: float = 0.0,
 ) -> np.ndarray:
-    """Smoothly blend closed/half/open/blink sprites from continuous energy level."""
+    """Smoothly blend closed/half/open + brows_up + blink/wink expressions."""
     lvl = max(0.0, min(1.0, level))
     if lvl < 0.5:
         t = lvl / 0.5
@@ -261,9 +286,15 @@ def _blend_mouth_frame(
         a, b = sprites["half"], sprites["open"]
 
     blended = a.astype(np.float32) * (1.0 - t) + b.astype(np.float32) * t
+    if brows_weight > 0.01 and "brows_up" in sprites:
+        brw = max(0.0, min(0.85, brows_weight))
+        blended = blended * (1.0 - brw) + sprites["brows_up"].astype(np.float32) * brw
     if blink_weight > 0.01:
         bw = max(0.0, min(1.0, blink_weight))
         blended = blended * (1.0 - bw) + sprites["blink"].astype(np.float32) * bw
+    if wink_weight > 0.01 and "wink" in sprites:
+        ww = max(0.0, min(1.0, wink_weight))
+        blended = blended * (1.0 - ww) + sprites["wink"].astype(np.float32) * ww
     return np.clip(blended, 0, 255).astype(np.uint8)
 
 
@@ -275,24 +306,26 @@ def _apply_smooth_motion(
     emotion: str,
     size: int,
 ) -> bytes:
-    """Apply subtle overscanned breathing, sway, and speech nod with zero border gaps."""
+    """Apply subtle overscanned breathing, head tilt, sway, and speech nod."""
     emo_bounce = 1.35 if emotion in ("happy", "laugh") else (0.7 if emotion == "sad" else 1.0)
-    scale = 1.025 + 0.006 * math.sin(2.0 * math.pi * 0.35 * t_sec) + 0.012 * energy * emo_bounce
+    scale = 1.045 + 0.006 * math.sin(2.0 * math.pi * 0.35 * t_sec) + 0.012 * energy * emo_bounce
     dx = 2.0 * math.sin(2.0 * math.pi * 0.42 * t_sec)
-    dy = (
-        1.2 * math.sin(2.0 * math.pi * 0.84 * t_sec)
-        - 2.6 * energy * emo_bounce
-    )
+    dy = 1.2 * math.sin(2.0 * math.pi * 0.84 * t_sec) - 2.6 * energy * emo_bounce
+    angle_rad = math.radians(1.4 * math.sin(2.0 * math.pi * 0.29 * t_sec) * emo_bounce)
 
     cx = size * 0.5
     cy = size * 0.5
     inv_scale = 1.0 / scale
-    a = inv_scale
-    b = 0.0
-    c = cx - inv_scale * (cx + dx)
-    d = 0.0
-    e = inv_scale
-    f = cy - inv_scale * (cy + dy)
+    cos_a = math.cos(angle_rad) * inv_scale
+    sin_a = math.sin(angle_rad) * inv_scale
+    tx = cx + dx
+    ty = cy + dy
+    a = cos_a
+    b = sin_a
+    c = cx - a * tx - b * ty
+    d = -sin_a
+    e = cos_a
+    f = cy - d * tx - e * ty
 
     pil_img = Image.fromarray(frame, mode="RGB")
     moved = pil_img.transform(
@@ -363,10 +396,31 @@ def render_talking_avatar_mp4(
         stderr=subprocess.PIPE,
     )
     assert proc.stdin is not None
+    blink_curve = (0.35, 0.78, 1.0, 0.78, 0.35)
+    wink_curve = (0.35, 0.8, 1.0, 1.0, 0.8, 0.35)
+    blink_period = max(24, int(fps * 3.1))
+    wink_period = max(48, int(fps * 6.8))
     try:
         for idx, (level, state) in enumerate(zip(levels, states)):
-            blink_w = 1.0 if state == "blink" else 0.0
-            blended = _blend_mouth_frame(sprites, level, blink_w)
+            b_phase = idx % blink_period
+            blink_w = blink_curve[b_phase] if b_phase < len(blink_curve) and level < 0.38 else (
+                1.0 if state == "blink" else 0.0
+            )
+            wink_w = 0.0
+            if emotion in ("happy", "laugh") and "wink" in sprites:
+                w_phase = (idx + fps) % wink_period
+                if w_phase < len(wink_curve) and level < 0.35:
+                    wink_w = wink_curve[w_phase]
+                    blink_w = 0.0
+            brows_w = max(0.0, (level - 0.62) / 0.38) if "brows_up" in sprites else 0.0
+
+            blended = _blend_mouth_frame(
+                sprites,
+                level,
+                blink_w,
+                wink_weight=wink_w,
+                brows_weight=brows_w,
+            )
             raw_bytes = _apply_smooth_motion(
                 blended,
                 t_sec=idx / max(1, fps),
