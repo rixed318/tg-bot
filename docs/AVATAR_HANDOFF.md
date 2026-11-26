@@ -23,6 +23,34 @@ each row is `closed`, `half`, `open`, `blink`. Row 7 contains
 Run `scripts/split_avatar_sheet.py SHEET OUTPUT_DIR` to produce the renderer's
 27 files at 384x384.
 
+## Identity fidelity requirement
+
+The current generated Karina and Katya quality sprites are temporary: their
+general hair, clothing and palette are usable, but their faces are not close
+enough to the source photographs.
+
+All future quality-avatar work must preserve the person's identity in detail,
+not merely produce a similar generic 2D character. Use the original photograph
+as the primary identity reference and the Anya sprites only as a style/layout
+reference. Preserve the characteristic face shape, eye shape and spacing,
+eyebrows, nose, lips, cheek structure, hairline, hairstyle, beauty marks and
+other distinguishing features. Expression variants may change only the eyes,
+eyebrows and mouth; they must not redesign the face.
+
+Before replacing a quality set:
+
+1. Generate and review the neutral portrait against the source photograph.
+2. Do not proceed to the full expression sheet until the neutral identity is
+   recognizably the same person.
+3. Keep one canonical neutral render and derive every expression from it with
+   strong identity preservation, instead of independently redesigning cells.
+4. Visually review at least neutral, happy, angry, blink and open-mouth frames
+   after splitting, plus one rendered Telegram video-note frame.
+
+Karina and Katya remain explicitly queued for a high-fidelity redraw under
+these rules. Artem and Ksyusha should also be checked against this bar during
+the next avatar pass.
+
 ## Current State (Option 1 — Smooth 2D Sprite Engine)
 Implemented in `src/tg_bot/avatar_video.py`:
 - Temporal attack/release smoothing on audio RMS envelope (`compute_smoothed_envelope`) to eliminate 1-frame mouth jitter.
