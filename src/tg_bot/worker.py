@@ -16,6 +16,7 @@ import threading
 import time
 from typing import Any
 
+from tg_bot.avatar_video import render_talking_avatar_mp4, resolve_avatar_dir
 from tg_bot.config import (
     AGY_BIN,
     AUDIO_SUFFIXES,
@@ -54,6 +55,7 @@ from tg_bot.telegram_api import (
     send_photo,
     send_sticker,
     send_video,
+    send_video_note,
     send_voice,
 )
 from tg_bot.transcribe import transcribe_audio
@@ -270,18 +272,63 @@ def _send_voice_reply(
     work_dir: Path,
     *,
     reply_to_message_id: int | None,
+    emotion: str = "neutral",
 ) -> tuple[int, str]:
-    """Synthesize spoken_text into OGG/Opus, send as Telegram voice, and archive to Drive."""
-    send_chat_action(token, task, "record_voice")
+    """Synthesize spoken_text, render talking-avatar VideoNote (if enabled) or Voice, and archive."""
+    profiles = load_voice_profiles()
+    avatar_enabled = bool(profiles.get("avatar_enabled", True))
+    send_chat_action(token, task, "record_video_note" if avatar_enabled else "record_voice")
+
     ogg_path = work_dir / f"voice_{task['id']}.ogg"
     voice_res = synthesize_telegram_voice(spoken_text, ogg_path)
-    mid = send_voice(
-        token,
-        task,
-        voice_res.ogg_path,
-        duration_seconds=voice_res.duration_seconds,
-        reply_to_message_id=reply_to_message_id,
-    )
+
+    mid: int | None = None
+    if avatar_enabled:
+        try:
+            avatar_dir = resolve_avatar_dir(voice_res.voice_name, profiles)
+            mp4_path = work_dir / f"avatar_{task['id']}.mp4"
+            rendered_mp4, vid_dur = render_talking_avatar_mp4(
+                voice_res.ogg_path,
+                mp4_path,
+                avatar_dir=avatar_dir,
+                emotion=emotion,
+            )
+            mid = send_video_note(
+                token,
+                task,
+                rendered_mp4,
+                duration_seconds=vid_dur,
+                reply_to_message_id=reply_to_message_id,
+            )
+            LOGGER.info(
+                "Sent talking-avatar video_note task=%s msg_id=%s dur=%ss emotion=%s voice=%s",
+                task["id"],
+                mid,
+                vid_dur,
+                emotion,
+                voice_res.voice_name,
+            )
+        except Exception as exc:
+            LOGGER.warning("Avatar video_note failed (%s), falling back to sendVoice", exc)
+            mid = None
+
+    if mid is None:
+        mid = send_voice(
+            token,
+            task,
+            voice_res.ogg_path,
+            duration_seconds=voice_res.duration_seconds,
+            reply_to_message_id=reply_to_message_id,
+        )
+        LOGGER.info(
+            "Sent voice reply task=%s msg_id=%s dur=%ss backend=%s voice=%s",
+            task["id"],
+            mid,
+            voice_res.duration_seconds,
+            voice_res.backend,
+            voice_res.voice_name,
+        )
+
     try:
         archive_on_drive(
             voice_res.ogg_path,
@@ -291,14 +338,6 @@ def _send_voice_reply(
         )
     except Exception as exc:
         LOGGER.warning("Failed to archive outgoing voice on Drive: %s", exc)
-    LOGGER.info(
-        "Sent voice reply task=%s msg_id=%s dur=%ss backend=%s voice=%s",
-        task["id"],
-        mid,
-        voice_res.duration_seconds,
-        voice_res.backend,
-        voice_res.voice_name,
-    )
     return mid, voice_res.spoken_text
 
 
@@ -394,6 +433,40 @@ def _handle_voice_admin_command(
             "reply",
             "--reason-base64",
             encoded(f"переключение голоса на {target_name}"),
+            "--answered-up-to",
+            str(primary_mid),
+            "--primary-id",
+            str(task["id"]),
+        )
+        return True
+
+    if raw.startswith("__AVATAR_MODE__:"):
+        arg = raw.split(":", 1)[1].strip()
+        profiles = load_voice_profiles()
+        from tg_bot.voice_tts import save_voice_profiles
+
+        current = bool(profiles.get("avatar_enabled", True))
+        new_val = (not current) if arg == "toggle" else (arg == "on")
+        profiles["avatar_enabled"] = new_val
+        save_voice_profiles(profiles)
+        reply_text = (
+            "Включил режим говорящего аватара в кружочках!"
+            if new_val
+            else "Выключил кружочки, теперь отвечаю обычными голосовыми."
+        )
+        _, spoken = _send_voice_reply(
+            token, task, reply_text, work_dir, reply_to_message_id=primary_mid, emotion="happy"
+        )
+        remote_queue(
+            "complete",
+            "--ids",
+            ",".join(claimed_ids),
+            "--response-base64",
+            encoded(spoken),
+            "--flag",
+            "reply",
+            "--reason-base64",
+            encoded(f"переключение аватара: {new_val}"),
             "--answered-up-to",
             str(primary_mid),
             "--primary-id",
@@ -702,6 +775,7 @@ def process_one(token: str) -> bool:
                 parsed.text,
                 work_dir,
                 reply_to_message_id=anchor_msg_id,
+                emotion=parsed.emotion,
             )
 
             outgoing_photos = (

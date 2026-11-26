@@ -130,6 +130,7 @@ async def main() -> None:
             BotCommand(command="voices", description="Показать доступные голоса"),
             BotCommand(command="voice", description="Выбрать голос по имени"),
             BotCommand(command="resetvoice", description="Сбросить голос на стандартный"),
+            BotCommand(command="avatar", description="Включить/выключить кружочки-аватары (on/off)"),
         ]
     )
     router = Router(name="joke-gemini-bot")
@@ -331,6 +332,35 @@ async def main() -> None:
             sender_id=message.from_user.id,
             sender_name=message.from_user.full_name,
             text="__RESET_VOICE__",
+            reply_context=None,
+            reply_to_is_bot=True,
+            is_mention=True,
+        )
+
+    @router.message(Command("avatar"))
+    async def toggle_avatar(message: Message) -> None:
+        if message.from_user is None:
+            return
+        configured = get_group()
+        in_group = bool(configured and message.chat.id == configured[0])
+        in_private = message.chat.type == ChatType.PRIVATE
+        if not in_group and not in_private:
+            return
+        if not await is_configured_group_admin(bot, message.from_user.id):
+            await message.answer("Переключать режим аватара может только администратор группы.")
+            return
+        parts = (message.text or "").split(maxsplit=1)
+        arg = parts[1].strip().lower() if len(parts) == 2 else "toggle"
+        if arg not in {"on", "off", "toggle"}:
+            arg = "toggle"
+        enqueue(
+            chat_id=message.chat.id,
+            thread_id=message.message_thread_id,
+            message_id=message.message_id,
+            reply_to_message_id=None,
+            sender_id=message.from_user.id,
+            sender_name=message.from_user.full_name,
+            text=f"__AVATAR_MODE__:{arg}",
             reply_context=None,
             reply_to_is_bot=True,
             is_mention=True,

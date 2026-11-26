@@ -156,6 +156,31 @@ def send_voice(
     )
 
 
+def send_video_note(
+    token: str,
+    task: dict[str, Any],
+    mp4_path: Path,
+    *,
+    duration_seconds: int | None = None,
+    length: int = 384,
+    reply_to_message_id: int | None = None,
+) -> int:
+    """Send a square MP4 as a circular Telegram video note."""
+    extra: dict[str, str] = {"length": str(length)}
+    if duration_seconds is not None and duration_seconds > 0:
+        extra["duration"] = str(duration_seconds)
+    return _send_multipart(
+        token,
+        "sendVideoNote",
+        "video_note",
+        mp4_path,
+        task,
+        reply_to_message_id,
+        extra_fields=extra,
+        timeout=120,
+    )
+
+
 def send_photo(
     token: str, task: dict[str, Any], path: Path, reply_to_message_id: int | None
 ) -> int:

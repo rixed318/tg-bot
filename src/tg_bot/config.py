@@ -10,6 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 AGY_BIN = Path(os.environ.get("TG_BOT_AGY_BIN", "/home/rus/.local/bin/agy-proxy"))
 TRIGGER_MODEL = os.environ.get("TG_BOT_TRIGGER_MODEL", "gemini-4-hydrogen-medium")
 REPLY_MODEL = os.environ.get("TG_BOT_REPLY_MODEL", "gemini-4-hydrogen-high")
+WHISPER_MODEL = os.environ.get("TG_BOT_WHISPER_MODEL", "large-v3-turbo")
 RCLONE_BIN = Path(os.environ.get("TG_BOT_RCLONE_BIN", "/home/rus/.local/bin/rclone"))
 FFMPEG_BIN = os.environ.get("TG_BOT_FFMPEG_BIN", "ffmpeg")
 FFPROBE_BIN = os.environ.get("TG_BOT_FFPROBE_BIN", "ffprobe")

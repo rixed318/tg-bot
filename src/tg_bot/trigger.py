@@ -353,6 +353,7 @@ def build_reply_prompt(
 - Стикер/GIF: `/home/rus/dev/rixed-music/.venv/bin/python /home/rus/dev/rixed-music/scripts/telegram_bot_sticker_gif.py <input> <output> [--mode sticker|video_sticker|gif]`
 - Вырезка фона: `/home/rus/dev/rixed-music/.venv/bin/python /home/rus/dev/rixed-music/scripts/telegram_bot_cutout.py <input> <output>`
 - Удаление своих сообщений: директива `[[delete-all-bot-messages]]` или `[[delete-previous-message]]` (на отдельной строке, в озвучку не попадёт).
+- Эмоция аватара (опционально на отдельной строке в самом конце, в озвучку не попадёт): `[[emotion:neutral]]`, `[[emotion:happy]]`, `[[emotion:angry]]`, `[[emotion:laugh]]`, `[[emotion:shock]]` или `[[emotion:sad]]`.
 - Генерация картинки: подагент `image-generator` (сохрани в `outbox/generated.png`) или директива `[[image-prompt:...]]`.
 - Скачивание по ссылке: `[[download-url:https://...]]` или `[[download-url-to-group:https://...]]`.
 - Отправить текущий файл из ЛС в группу: `[[copy-current-message-to-group]]`.

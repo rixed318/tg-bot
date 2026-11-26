@@ -48,6 +48,7 @@ DELETE_PREVIOUS_DIRECTIVE = re.compile(r"^\[\[delete-previous-message\]\]$")
 DELETE_ALL_DIRECTIVE = re.compile(r"^\[\[delete-(?:all-)?bot-messages(?::(?P<count>\d+|all))?\]\]$")
 STICKER_DIRECTIVE = re.compile(r"^\[\[(?:make-)?sticker\]\]$")
 GIF_DIRECTIVE = re.compile(r"^\[\[(?:make-)?gif\]\]$")
+EMOTION_DIRECTIVE = re.compile(r"^\[\[emotion:(?P<emotion>[a-zA-Z_-]+)\]\]$")
 
 MEDIA_CATALOG: dict[str, dict[str, Any]] = {
     "anya_tiktok": {
@@ -100,6 +101,7 @@ class AgentResponse:
     delete_all_bot_messages: bool = False
     make_sticker: bool = False
     make_gif: bool = False
+    emotion: str = "neutral"
 
 
 def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
@@ -120,9 +122,14 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
     delete_all_bot_messages = False
     make_sticker = False
     make_gif = False
+    emotion = "neutral"
 
     for line in response.splitlines():
         stripped = line.strip()
+        emotion_match = EMOTION_DIRECTIVE.fullmatch(stripped)
+        if emotion_match:
+            emotion = emotion_match.group("emotion").strip().lower()
+            continue
         if DELETE_ALL_DIRECTIVE.fullmatch(stripped):
             delete_all_bot_messages = True
             continue
@@ -224,6 +231,7 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
         delete_all_bot_messages=delete_all_bot_messages,
         make_sticker=make_sticker,
         make_gif=make_gif,
+        emotion=emotion,
     )
 
 
