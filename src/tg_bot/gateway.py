@@ -109,11 +109,11 @@ def _build_main_panel() -> tuple[str, InlineKeyboardMarkup]:
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [mute_btn, fmt_btn],
-            [InlineKeyboardButton(text="🎭 Персонаж (Голос + Поведение)", callback_data="cmd:menu:char")],
             [
-                InlineKeyboardButton(text="🎙 Только голос", callback_data="cmd:menu:voice"),
-                InlineKeyboardButton(text="🧠 Поведение", callback_data="cmd:menu:persona"),
+                InlineKeyboardButton(text="🎙 Голос (отдельно)", callback_data="cmd:menu:voice"),
+                InlineKeyboardButton(text="🧠 Поведение (отдельно)", callback_data="cmd:menu:persona"),
             ],
+            [InlineKeyboardButton(text="🎭 Пресет (Голос + Поведение вместе)", callback_data="cmd:menu:char")],
             [
                 InlineKeyboardButton(text="🤖 Модель ИИ", callback_data="cmd:menu:ai"),
                 InlineKeyboardButton(text="🔄 Обновить", callback_data="cmd:home"),
