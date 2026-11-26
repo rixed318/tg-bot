@@ -54,11 +54,12 @@ def test_custom_voice_profile_activation_and_reset(tmp_path: Path, monkeypatch) 
     assert wav_out.is_file()
     assert transcript == "Тестовый голос"
 
-    name, active_wav, active_txt = voice_tts.get_active_voice_reference()
+    name, active_wav, active_txt, _ = voice_tts.get_active_voice_reference()
     assert name == "custom"
     assert active_wav == wav_out
     assert active_txt == "Тестовый голос"
 
+    assert voice_tts.resolve_voice_profile_name("CUSTOM") == "custom"
     assert voice_tts.reset_active_voice() == "default"
     profiles = voice_tts.load_voice_profiles()
     assert profiles["active"] == "default"

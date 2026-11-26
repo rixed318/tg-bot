@@ -37,6 +37,7 @@ from tg_bot.drive_sync import (
     sync_all_text_contexts_in_background,
     write_local_full_context,
 )
+from tg_bot.llm_client import run_llm_prompt
 from tg_bot.media_tools import (
     download_public_media,
     find_source_video,
@@ -68,6 +69,8 @@ from tg_bot.trigger import (
 from tg_bot.voice_tts import (
     load_voice_profiles,
     reset_active_voice,
+    resolve_voice_profile_name,
+    save_voice_profiles,
     set_custom_voice_from_audio,
     synthesize_telegram_voice,
 )
@@ -240,29 +243,14 @@ def _ask_gemini_reply(
         context_attachments=context_attachments,
         work_dir=work_dir,
     )
-    command = [
-        str(AGY_BIN),
-        "--dangerously-skip-permissions",
-        "--model",
-        REPLY_MODEL,
-        "--output-format",
-        "json",
-        "--print-timeout",
-        f"{timeout_seconds}s",
-        f"--print={reply_prompt}",
-    ]
-    result = subprocess.run(
-        command,
-        cwd=work_dir,
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=timeout_seconds + 30,
+    bot_settings = task.get("bot_settings") or {}
+    model_id = str(bot_settings.get("ai_model") or REPLY_MODEL).strip() or REPLY_MODEL
+    return run_llm_prompt(
+        reply_prompt,
+        work_dir=work_dir,
+        model_id=model_id,
+        timeout_seconds=timeout_seconds,
     )
-    payload = json.loads(result.stdout)
-    if payload.get("status") != "SUCCESS":
-        raise RuntimeError(f"agy returned {payload.get('status')}")
-    return str(payload.get("response") or "").strip()
 
 
 def _send_voice_reply(
@@ -276,11 +264,18 @@ def _send_voice_reply(
 ) -> tuple[int, str]:
     """Synthesize spoken_text, render talking-avatar VideoNote (if enabled) or Voice, and archive."""
     profiles = load_voice_profiles()
-    avatar_enabled = bool(profiles.get("avatar_enabled", True))
+    bot_settings = task.get("bot_settings") or {}
+    if "avatar_enabled" in bot_settings:
+        avatar_enabled = bot_settings["avatar_enabled"] in ("1", "true", "True")
+    else:
+        avatar_enabled = bool(profiles.get("avatar_enabled", True))
+    profile_override = bot_settings.get("voice_profile") or None
     send_chat_action(token, task, "record_video_note" if avatar_enabled else "record_voice")
 
     ogg_path = work_dir / f"voice_{task['id']}.ogg"
-    voice_res = synthesize_telegram_voice(spoken_text, ogg_path)
+    voice_res = synthesize_telegram_voice(
+        spoken_text, ogg_path, profile_override=profile_override
+    )
 
     mid: int | None = None
     if avatar_enabled:
@@ -386,10 +381,11 @@ def _handle_voice_admin_command(
     if raw == "__LIST_VOICES__":
         profiles = load_voice_profiles()
         active = profiles.get("active", "default")
-        names = ", ".join((profiles.get("profiles") or {}).keys()) or "default"
+        entries = profiles.get("profiles") or {}
+        names = ", ".join(f"{k} ({v.get('label', k)})" for k, v in entries.items()) or "default"
         reply_text = (
-            f"Сейчас активен профиль {active}. Доступные профили: {names}. "
-            "Чтобы записать свой голос, отправь голосовое с подписью сетвойс."
+            f"Сейчас активен профиль {active}. Доступные голоса: {names}. "
+            "Переключить можно командой /voice и имя, например /voice дед или /voice демон."
         )
         _, spoken = _send_voice_reply(token, task, reply_text, work_dir, reply_to_message_id=primary_mid)
         remote_queue(
@@ -410,18 +406,18 @@ def _handle_voice_admin_command(
         return True
 
     if raw.startswith("__SWITCH_VOICE__:"):
-        target_name = raw.split(":", 1)[1].strip()
+        query = raw.split(":", 1)[1].strip()
         profiles = load_voice_profiles()
-        available = profiles.get("profiles") or {}
-        if target_name in available:
-            profiles["active"] = target_name
-            from tg_bot.voice_tts import save_voice_profiles
-
+        resolved = resolve_voice_profile_name(query, profiles)
+        if resolved:
+            profiles["active"] = resolved
             save_voice_profiles(profiles)
-            reply_text = f"Переключил голос на профиль {target_name}."
+            label = (profiles.get("profiles") or {}).get(resolved, {}).get("label", resolved)
+            reply_text = f"Переключил голос на профиль {label}."
         else:
+            available = profiles.get("profiles") or {}
             names = ", ".join(available.keys()) or "default"
-            reply_text = f"Профиль {target_name} не найден. Доступны: {names}."
+            reply_text = f"Профиль {query} не найден. Доступны: {names}."
         _, spoken = _send_voice_reply(token, task, reply_text, work_dir, reply_to_message_id=primary_mid)
         remote_queue(
             "complete",

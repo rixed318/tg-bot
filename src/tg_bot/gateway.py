@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standalone Telegram ingress for the Blender group voice-first Gemini bot."""
+"""Standalone Telegram ingress with structured /commands inline control panel."""
 
 from __future__ import annotations
 
@@ -7,33 +7,138 @@ import asyncio
 import logging
 import os
 
-from aiogram import Bot, Dispatcher, Router
+from aiogram import Bot, Dispatcher, F, Router
 from aiogram.enums import ChatMemberStatus, ChatType, MessageEntityType
 from aiogram.filters import Command
-from aiogram.types import BotCommand, Message
+from aiogram.types import (
+    BotCommand,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 try:
     from tg_bot.queue_db import (
         enqueue,
+        get_bot_settings,
         get_group,
         is_muted,
         remember_message,
         remember_participant,
+        set_bot_setting,
         set_group,
         set_muted,
     )
 except ImportError:
     from joke_bot_queue import (
         enqueue,
+        get_bot_settings,
         get_group,
         is_muted,
         remember_message,
         remember_participant,
+        set_bot_setting,
         set_group,
         set_muted,
     )
 
 LOGGER = logging.getLogger("rixed-joke-bot")
+
+CHARACTER_CATALOG: list[tuple[str, str]] = [
+    ("default", "Тау бао"),
+    ("anya", "Аня"),
+    ("ded", "Дед Геннадий"),
+    ("gopnik", "Гопник"),
+    ("anime", "Анимешница"),
+    ("shizo", "Шизофилософ"),
+    ("skuf", "Скуф"),
+    ("altushka", "Альтушка"),
+    ("tamada", "Тамада"),
+    ("robot", "Робот"),
+    ("arsen", "Арсен Маркарян"),
+    ("kot", "Кот"),
+    ("demon", "Демон"),
+    ("custom", "Свой голос"),
+]
+
+AI_MODELS: list[tuple[str, str]] = [
+    ("gemini-4-hydrogen-high", "Gemini 4 Hydrogen (High)"),
+    ("gemini-4-hydrogen-medium", "Gemini 4 Hydrogen (Medium)"),
+    ("gemini-3.8-flash-high", "Gemini 3.8 Flash (High)"),
+    ("grok-4.6", "Grok 4.6"),
+    ("grok-4.5", "Grok 4.5"),
+]
+
+
+def _label_for(catalog: list[tuple[str, str]], key: str, fallback: str) -> str:
+    for cid, label in catalog:
+        if cid == key:
+            return label
+    return fallback
+
+
+def _build_main_panel() -> tuple[str, InlineKeyboardMarkup]:
+    settings = get_bot_settings()
+    muted = settings.get("muted") == "1"
+    voice = settings.get("voice_profile", "default")
+    persona = settings.get("persona", "default")
+    ai_model = settings.get("ai_model", "gemini-4-hydrogen-high")
+    avatar_on = settings.get("avatar_enabled", "1") == "1"
+
+    status_line = "🔇 На паузе (только слушает)" if muted else "🔊 Активен (отвечает в чате)"
+    fmt_line = "🎬 Кружочки-аватары" if avatar_on else "🎙 Только голосовые (ГС)"
+
+    text = (
+        "⚙️ <b>Панель управления ботом</b>\n\n"
+        f"• Режим: <b>{status_line}</b>\n"
+        f"• Голос: <b>{_label_for(CHARACTER_CATALOG, voice, voice)}</b>\n"
+        f"• Поведение: <b>{_label_for(CHARACTER_CATALOG, persona, persona)}</b>\n"
+        f"• ИИ-модель: <b>{_label_for(AI_MODELS, ai_model, ai_model)}</b>\n"
+        f"• Формат: <b>{fmt_line}</b>"
+    )
+    mute_btn = (
+        InlineKeyboardButton(text="🔊 Включить (Unmute)", callback_data="cmd:mute:0")
+        if muted
+        else InlineKeyboardButton(text="🔇 Пауза (Mute)", callback_data="cmd:mute:1")
+    )
+    fmt_btn = InlineKeyboardButton(
+        text="🎬 Формат: Кружочки" if avatar_on else "🎙 Формат: ГС",
+        callback_data=f"cmd:avatar:{'0' if avatar_on else '1'}",
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [mute_btn, fmt_btn],
+            [InlineKeyboardButton(text="🎭 Персонаж (Голос + Поведение)", callback_data="cmd:menu:char")],
+            [
+                InlineKeyboardButton(text="🎙 Только голос", callback_data="cmd:menu:voice"),
+                InlineKeyboardButton(text="🧠 Поведение", callback_data="cmd:menu:persona"),
+            ],
+            [
+                InlineKeyboardButton(text="🤖 Модель ИИ", callback_data="cmd:menu:ai"),
+                InlineKeyboardButton(text="🔄 Обновить", callback_data="cmd:home"),
+            ],
+            [InlineKeyboardButton(text="✖️ Закрыть", callback_data="cmd:close")],
+        ]
+    )
+    return text, kb
+
+
+def _build_grid_panel(
+    title: str, items: list[tuple[str, str]], active_key: str, prefix: str
+) -> tuple[str, InlineKeyboardMarkup]:
+    rows: list[list[InlineKeyboardButton]] = []
+    pair: list[InlineKeyboardButton] = []
+    for cid, label in items:
+        mark = "✅ " if cid == active_key else ""
+        pair.append(InlineKeyboardButton(text=f"{mark}{label}", callback_data=f"{prefix}:{cid}"))
+        if len(pair) == 2:
+            rows.append(pair)
+            pair = []
+    if pair:
+        rows.append(pair)
+    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="cmd:home")])
+    return title, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def is_admin(message: Message, bot: Bot) -> bool:
@@ -118,22 +223,112 @@ async def main() -> None:
         raise RuntimeError("BOT_TOKEN is missing")
     bot = Bot(token)
     me = await bot.get_me()
+    # Keep slash menu clean: /commands opens the full structured inline panel.
     await bot.set_my_commands(
         [
-            BotCommand(command="setup", description="Привязать эту группу"),
-            BotCommand(command="start", description="Разрешить личный диалог"),
-            BotCommand(command="status", description="Показать состояние"),
-            BotCommand(command="mute", description="Поставить бота на паузу"),
-            BotCommand(command="unmute", description="Вернуть бота в разговор"),
-            BotCommand(command="generate", description="Создать изображение по промпту"),
-            BotCommand(command="setvoice", description="Установить голос (в ЛС или reply на ГС в группе)"),
-            BotCommand(command="voices", description="Показать доступные голоса"),
-            BotCommand(command="voice", description="Выбрать голос по имени"),
-            BotCommand(command="resetvoice", description="Сбросить голос на стандартный"),
-            BotCommand(command="avatar", description="Включить/выключить кружочки-аватары (on/off)"),
+            BotCommand(command="commands", description="Панель управления (голос, характер, ИИ, мут)"),
+            BotCommand(command="setup", description="Привязать группу"),
+            BotCommand(command="start", description="Личный диалог с ботом"),
         ]
     )
     router = Router(name="joke-gemini-bot")
+
+    @router.message(Command("commands"))
+    async def commands_panel(message: Message) -> None:
+        if message.from_user is None:
+            return
+        configured = get_group()
+        in_group = bool(configured and message.chat.id == configured[0])
+        in_private = message.chat.type == ChatType.PRIVATE
+        if not in_group and not in_private:
+            return
+        if not await is_configured_group_admin(bot, message.from_user.id):
+            await message.answer("Панель управления доступна только администратору группы.")
+            return
+        text, kb = _build_main_panel()
+        await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+    @router.callback_query(F.data.startswith("cmd:"))
+    async def handle_panel_callback(callback: CallbackQuery) -> None:
+        if callback.from_user is None or callback.message is None:
+            return
+        if not await is_configured_group_admin(bot, callback.from_user.id):
+            await callback.answer("Только для администраторов группы.", show_alert=True)
+            return
+
+        data = callback.data or ""
+        parts = data.split(":")
+        action = parts[1] if len(parts) > 1 else "home"
+
+        if action == "close":
+            await callback.message.delete()
+            await callback.answer()
+            return
+        if action == "mute" and len(parts) > 2:
+            set_muted(parts[2] == "1")
+            await callback.answer("Пауза включена" if parts[2] == "1" else "Бот активен")
+        elif action == "avatar" and len(parts) > 2:
+            set_bot_setting("avatar_enabled", "1" if parts[2] == "1" else "0")
+            await callback.answer("Режим кружочков" if parts[2] == "1" else "Только ГС")
+        elif action == "setchar" and len(parts) > 2:
+            cid = parts[2]
+            set_bot_setting("voice_profile", cid)
+            set_bot_setting("persona", cid)
+            await callback.answer(f"Персонаж: {_label_for(CHARACTER_CATALOG, cid, cid)}")
+        elif action == "setvoice" and len(parts) > 2:
+            cid = parts[2]
+            set_bot_setting("voice_profile", cid)
+            await callback.answer(f"Голос: {_label_for(CHARACTER_CATALOG, cid, cid)}")
+        elif action == "setpersona" and len(parts) > 2:
+            cid = parts[2]
+            set_bot_setting("persona", cid)
+            await callback.answer(f"Поведение: {_label_for(CHARACTER_CATALOG, cid, cid)}")
+        elif action == "setai" and len(parts) > 2:
+            mid = parts[2]
+            set_bot_setting("ai_model", mid)
+            await callback.answer(f"ИИ: {_label_for(AI_MODELS, mid, mid)}")
+
+        settings = get_bot_settings()
+        if action == "menu" and len(parts) > 2:
+            sub = parts[2]
+            if sub == "char":
+                text, kb = _build_grid_panel(
+                    "🎭 <b>Выбери персонажа (меняет сразу и голос, и поведение):</b>",
+                    CHARACTER_CATALOG,
+                    settings.get("voice_profile", "default"),
+                    "cmd:setchar",
+                )
+            elif sub == "voice":
+                text, kb = _build_grid_panel(
+                    "🎙 <b>Выбери только голос (поведение сохранится):</b>",
+                    CHARACTER_CATALOG,
+                    settings.get("voice_profile", "default"),
+                    "cmd:setvoice",
+                )
+            elif sub == "persona":
+                text, kb = _build_grid_panel(
+                    "🧠 <b>Выбери модель поведения (голос сохранится):</b>",
+                    CHARACTER_CATALOG,
+                    settings.get("persona", "default"),
+                    "cmd:setpersona",
+                )
+            elif sub == "ai":
+                text, kb = _build_grid_panel(
+                    "🤖 <b>Выбери нейросеть для ответов:</b>",
+                    AI_MODELS,
+                    settings.get("ai_model", "gemini-4-hydrogen-high"),
+                    "cmd:setai",
+                )
+            else:
+                text, kb = _build_main_panel()
+        else:
+            text, kb = _build_main_panel()
+
+        try:
+            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        except Exception:
+            pass
+        await callback.answer()
 
     @router.message(Command("setup"))
     async def setup(message: Message) -> None:
@@ -149,7 +344,7 @@ async def main() -> None:
             return
         set_group(message.chat.id, message.chat.title or "Telegram-группа")
         await message.answer(
-            "Готово. Я привязан к этой группе, общаюсь голосовыми и веду полную историю на Google Drive."
+            "Готово! Управляйте голосом, поведением, моделью ИИ и режимом через /commands."
         )
         LOGGER.info("Configured group=%s title=%r", message.chat.id, message.chat.title)
 
@@ -170,7 +365,7 @@ async def main() -> None:
             can_dm=True,
         )
         await message.answer(
-            "Личка подключена. Здесь у нас отдельный разговор — сообщения других участников не подмешиваются."
+            "Личка подключена. Настройки доступны по команде /commands."
         )
 
     @router.message(Command("status"))
@@ -182,10 +377,8 @@ async def main() -> None:
             and await is_configured_group_member(bot, message.from_user.id)
         )
         if configured and (message.chat.id == configured[0] or allowed_private):
-            mode = "пауза" if is_muted() else "активен"
-            await message.answer(
-                f"На связи. Режим: {mode}. Общение голосовыми, память без лимита + Google Drive."
-            )
+            text, kb = _build_main_panel()
+            await message.answer(text, parse_mode="HTML", reply_markup=kb)
 
     @router.message(Command("mute"))
     async def mute(message: Message) -> None:
@@ -207,7 +400,7 @@ async def main() -> None:
             await message.answer("Вернуть меня в разговор может только администратор.")
             return
         set_muted(False)
-        await message.answer("Я снова в эфире. Теперь отвечаю голосовыми 😎")
+        await message.answer("Я снова в эфире 😎")
 
     @router.message(Command("setvoice"))
     async def setvoice(message: Message) -> None:
@@ -256,115 +449,6 @@ async def main() -> None:
             reply_to_is_bot=True,
             is_mention=True,
         )
-        LOGGER.info("Setvoice command queued message=%s sender=%s", message.message_id, message.from_user.id)
-
-    @router.message(Command("voices"))
-    async def list_voices(message: Message) -> None:
-        if message.from_user is None:
-            return
-        configured = get_group()
-        in_group = bool(configured and message.chat.id == configured[0])
-        in_private = message.chat.type == ChatType.PRIVATE
-        if not in_group and not in_private:
-            return
-        if in_private and not await is_configured_group_member(bot, message.from_user.id):
-            return
-        enqueue(
-            chat_id=message.chat.id,
-            thread_id=message.message_thread_id,
-            message_id=message.message_id,
-            reply_to_message_id=None,
-            sender_id=message.from_user.id,
-            sender_name=message.from_user.full_name,
-            text="__LIST_VOICES__",
-            reply_context=None,
-            reply_to_is_bot=True,
-            is_mention=True,
-        )
-
-    @router.message(Command("voice"))
-    async def switch_voice(message: Message) -> None:
-        if message.from_user is None:
-            return
-        configured = get_group()
-        in_group = bool(configured and message.chat.id == configured[0])
-        in_private = message.chat.type == ChatType.PRIVATE
-        if not in_group and not in_private:
-            return
-        if not await is_configured_group_admin(bot, message.from_user.id):
-            await message.answer("Переключать голос может только администратор группы.")
-            return
-        parts = (message.text or "").split(maxsplit=1)
-        profile_name = parts[1].strip() if len(parts) == 2 else ""
-        if not profile_name:
-            await message.answer("Укажи имя профиля: /voice default или /voice custom")
-            return
-        enqueue(
-            chat_id=message.chat.id,
-            thread_id=message.message_thread_id,
-            message_id=message.message_id,
-            reply_to_message_id=None,
-            sender_id=message.from_user.id,
-            sender_name=message.from_user.full_name,
-            text=f"__SWITCH_VOICE__:{profile_name}",
-            reply_context=None,
-            reply_to_is_bot=True,
-            is_mention=True,
-        )
-
-    @router.message(Command("resetvoice"))
-    async def reset_voice(message: Message) -> None:
-        if message.from_user is None:
-            return
-        configured = get_group()
-        in_group = bool(configured and message.chat.id == configured[0])
-        in_private = message.chat.type == ChatType.PRIVATE
-        if not in_group and not in_private:
-            return
-        if not await is_configured_group_admin(bot, message.from_user.id):
-            await message.answer("Сбрасывать голос может только администратор группы.")
-            return
-        enqueue(
-            chat_id=message.chat.id,
-            thread_id=message.message_thread_id,
-            message_id=message.message_id,
-            reply_to_message_id=None,
-            sender_id=message.from_user.id,
-            sender_name=message.from_user.full_name,
-            text="__RESET_VOICE__",
-            reply_context=None,
-            reply_to_is_bot=True,
-            is_mention=True,
-        )
-
-    @router.message(Command("avatar"))
-    async def toggle_avatar(message: Message) -> None:
-        if message.from_user is None:
-            return
-        configured = get_group()
-        in_group = bool(configured and message.chat.id == configured[0])
-        in_private = message.chat.type == ChatType.PRIVATE
-        if not in_group and not in_private:
-            return
-        if not await is_configured_group_admin(bot, message.from_user.id):
-            await message.answer("Переключать режим аватара может только администратор группы.")
-            return
-        parts = (message.text or "").split(maxsplit=1)
-        arg = parts[1].strip().lower() if len(parts) == 2 else "toggle"
-        if arg not in {"on", "off", "toggle"}:
-            arg = "toggle"
-        enqueue(
-            chat_id=message.chat.id,
-            thread_id=message.message_thread_id,
-            message_id=message.message_id,
-            reply_to_message_id=None,
-            sender_id=message.from_user.id,
-            sender_name=message.from_user.full_name,
-            text=f"__AVATAR_MODE__:{arg}",
-            reply_context=None,
-            reply_to_is_bot=True,
-            is_mention=True,
-        )
 
     @router.message(Command("generate"))
     async def generate(message: Message) -> None:
@@ -375,9 +459,7 @@ async def main() -> None:
         parts = raw.split(maxsplit=1)
         image_prompt = parts[1].strip() if len(parts) == 2 else ""
         if not image_prompt:
-            await message.answer(
-                "После /generate с новой строки напишите точный промпт изображения."
-            )
+            await message.answer("После /generate с новой строки напишите точный промпт изображения.")
             return
         remember_participant(
             message.from_user.id,
@@ -406,7 +488,6 @@ async def main() -> None:
             reply_to_is_bot=True,
             is_mention=True,
         )
-        LOGGER.info("Generate command queued message=%s", message.message_id)
 
     @router.message()
     async def queue_message(message: Message) -> None:
@@ -449,11 +530,10 @@ async def main() -> None:
             photo_file_id=photo_file_id,
             reply_to_message_id=reply.message_id if reply else None,
         )
-        # Group pause means silent observation, not loss of future context.
         if is_group and is_muted():
             return
 
-        created = enqueue(
+        enqueue(
             chat_id=message.chat.id,
             thread_id=message.message_thread_id,
             message_id=message.message_id,
@@ -465,14 +545,6 @@ async def main() -> None:
             photo_file_id=photo_file_id,
             reply_to_is_bot=reply_to_is_bot,
             is_mention=is_mention,
-        )
-        LOGGER.info(
-            "Message %s queued=%s sender=%s reply_bot=%s mention=%s",
-            message.message_id,
-            created,
-            message.from_user.id,
-            reply_to_is_bot,
-            is_mention,
         )
 
     dispatcher = Dispatcher()

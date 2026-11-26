@@ -11,6 +11,150 @@
       "label": "Маша (студийный женский)",
       "audio": "masha.wav",
       "transcript_file": "masha.txt"
+    },
+    "anya": {
+      "label": "Аня",
+      "aliases": [
+        "аня",
+        "анечка",
+        "anya"
+      ],
+      "audio": "masha.wav",
+      "transcript_file": "masha.txt",
+      "avatar_dir": "avatars/anya",
+      "speed": 1.03
+    },
+    "ded": {
+      "label": "Дед Геннадий",
+      "aliases": [
+        "дед",
+        "геннадий",
+        "дед геннадий",
+        "старик"
+      ],
+      "audio": "ded.wav",
+      "transcript_file": "ded.txt",
+      "speed": 0.91,
+      "ffmpeg_fx": "asetrate=24000*0.93303,aresample=24000,atempo=1.07177,highpass=f=120,lowpass=f=3800"
+    },
+    "gopnik": {
+      "label": "Гопник",
+      "aliases": [
+        "гопник",
+        "пацан",
+        "быдло"
+      ],
+      "audio": "gopnik.wav",
+      "transcript_file": "gopnik.txt",
+      "speed": 1.08,
+      "ffmpeg_fx": "equalizer=f=240:width_type=o:width=1.5:g=3,acompressor=threshold=-15dB:ratio=3"
+    },
+    "anime": {
+      "label": "Анимешница",
+      "aliases": [
+        "анимешница",
+        "аниме",
+        "тян",
+        "тянка"
+      ],
+      "audio": "anime.wav",
+      "transcript_file": "anime.txt",
+      "speed": 1.14,
+      "ffmpeg_fx": "asetrate=24000*1.09051,aresample=24000,atempo=0.91700,equalizer=f=3500:width_type=o:width=1.5:g=2"
+    },
+    "shizo": {
+      "label": "Шизофилософ",
+      "aliases": [
+        "шизофилософ",
+        "шиз",
+        "философ"
+      ],
+      "audio": "shizo.wav",
+      "transcript_file": "shizo.txt",
+      "speed": 0.88,
+      "ffmpeg_fx": "aecho=0.8:0.88:42:0.28,equalizer=f=350:width_type=o:width=1.5:g=3"
+    },
+    "skuf": {
+      "label": "Скуф",
+      "aliases": [
+        "скуф"
+      ],
+      "audio": "skuf.wav",
+      "transcript_file": "skuf.txt",
+      "speed": 0.93,
+      "ffmpeg_fx": "asetrate=24000*0.95484,aresample=24000,atempo=1.04729,equalizer=f=160:width_type=o:width=1.5:g=3"
+    },
+    "altushka": {
+      "label": "Альтушка",
+      "aliases": [
+        "альтушка",
+        "альт"
+      ],
+      "audio": "altushka.wav",
+      "transcript_file": "altushka.txt",
+      "speed": 0.95,
+      "ffmpeg_fx": "equalizer=f=280:width_type=o:width=1.5:g=2"
+    },
+    "tamada": {
+      "label": "Тамада",
+      "aliases": [
+        "тамада",
+        "ведущий"
+      ],
+      "audio": "tamada.wav",
+      "transcript_file": "tamada.txt",
+      "speed": 1.1,
+      "ffmpeg_fx": "acompressor=threshold=-12dB:ratio=5,equalizer=f=2500:width_type=o:width=1.5:g=3"
+    },
+    "robot": {
+      "label": "Робот",
+      "aliases": [
+        "робот",
+        "киборг",
+        "бот"
+      ],
+      "audio": "robot.wav",
+      "transcript_file": "robot.txt",
+      "speed": 1.0,
+      "ffmpeg_fx": "flanger=delay=3:depth=3:regen=78:width=80:speed=4,aecho=0.8:0.5:12:0.45,equalizer=f=1300:width_type=o:width=1.2:g=5"
+    },
+    "arsen": {
+      "label": "Арсен Маркарян",
+      "aliases": [
+        "арсен",
+        "маркарян",
+        "арсен маркарян",
+        "коуч"
+      ],
+      "audio": "arsen.wav",
+      "transcript_file": "arsen.txt",
+      "speed": 1.03,
+      "ffmpeg_fx": "asetrate=24000*0.95484,aresample=24000,atempo=1.04729,acompressor=threshold=-13dB:ratio=4,equalizer=f=160:width_type=o:width=1.5:g=3"
+    },
+    "kot": {
+      "label": "Кот",
+      "aliases": [
+        "кот",
+        "котик",
+        "мяу"
+      ],
+      "audio": "kot.wav",
+      "transcript_file": "kot.txt",
+      "speed": 1.1,
+      "ffmpeg_fx": "asetrate=24000*1.10957,aresample=24000,atempo=0.90125,equalizer=f=2400:width_type=o:width=1.5:g=2"
+    },
+    "demon": {
+      "label": "Демон",
+      "aliases": [
+        "демон",
+        "сатана",
+        "дьявол",
+        "ад"
+      ],
+      "audio": "demon.wav",
+      "transcript_file": "demon.txt",
+      "speed": 0.9,
+      "ffmpeg_fx": "asetrate=24000*0.88067,aresample=24000,atempo=1.13550,aecho=0.8:0.85:45|85:0.35|0.25,equalizer=f=95:width_type=o:width=1.5:g=5"
     }
   }
 }

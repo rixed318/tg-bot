@@ -165,15 +165,16 @@ def probe_duration_seconds(audio_path: Path) -> int:
         return 1
 
 
-def convert_to_telegram_ogg(input_audio: Path, output_ogg: Path) -> Path:
+def convert_to_telegram_ogg(
+    input_audio: Path, output_ogg: Path, *, audio_fx: str | None = None
+) -> Path:
     """Encode audio as 48kHz mono OGG/Opus for native Telegram voice message playback."""
     output_ogg.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
+    cmd = [FFMPEG_BIN, "-y", "-i", str(input_audio)]
+    if audio_fx:
+        cmd.extend(["-af", audio_fx])
+    cmd.extend(
         [
-            FFMPEG_BIN,
-            "-y",
-            "-i",
-            str(input_audio),
             "-vn",
             "-ac",
             "1",
@@ -186,11 +187,9 @@ def convert_to_telegram_ogg(input_audio: Path, output_ogg: Path) -> Path:
             "-application",
             "voip",
             str(output_ogg),
-        ],
-        check=True,
-        capture_output=True,
-        timeout=60,
+        ]
     )
+    subprocess.run(cmd, check=True, capture_output=True, timeout=60)
     return output_ogg
 
 
@@ -273,8 +272,25 @@ def ensure_default_reference_voice() -> tuple[Path, str]:
     return wav_path, DEFAULT_EDGE_SEED_TEXT
 
 
-def get_active_voice_reference() -> tuple[str, Path, str]:
-    """Return (profile_name, reference_wav_path, reference_transcript)."""
+def resolve_voice_profile_name(query: str, profiles_data: dict[str, Any] | None = None) -> str | None:
+    """Resolve a profile ID or Russian alias (case-insensitive) to canonical profile key."""
+    data = profiles_data or load_voice_profiles()
+    profiles = data.get("profiles") or {}
+    q = query.strip().lower()
+    if not q:
+        return None
+    if q in profiles:
+        return q
+    for key, entry in profiles.items():
+        label = str(entry.get("label") or "").lower()
+        aliases = [str(a).lower() for a in (entry.get("aliases") or [])]
+        if q == label or q in aliases or (len(q) >= 3 and any(q in a for a in aliases)):
+            return key
+    return None
+
+
+def get_active_voice_reference() -> tuple[str, Path, str, dict[str, Any]]:
+    """Return (profile_name, reference_wav_path, reference_transcript, profile_meta)."""
     profiles = load_voice_profiles()
     active_name = str(profiles.get("active") or "default")
     entry = (profiles.get("profiles") or {}).get(active_name)
@@ -291,10 +307,10 @@ def get_active_voice_reference() -> tuple[str, Path, str]:
                 transcript = transcribe_audio(audio_path, language="ru") or "Привет, я на связи."
                 if txt_path:
                     txt_path.write_text(transcript, encoding="utf-8")
-            return active_name, audio_path, transcript
+            return active_name, audio_path, transcript, entry
 
     wav_path, transcript = ensure_default_reference_voice()
-    return "default", wav_path, transcript
+    return "default", wav_path, transcript, {}
 
 
 def set_custom_voice_from_audio(
@@ -399,6 +415,8 @@ def _synthesize_f5_raw(
     ref_audio: Path,
     ref_text: str,
     output_wav: Path,
+    *,
+    speed: float = 1.02,
 ) -> Path:
     import soundfile as sf
     from f5_tts.infer.utils_infer import infer_process
@@ -415,7 +433,7 @@ def _synthesize_f5_raw(
         vocoder=runtime["vocoder"],
         device=runtime["device"],
         nfe_step=24,
-        speed=1.02,
+        speed=speed,
     )
     output_wav.parent.mkdir(parents=True, exist_ok=True)
     sf.write(str(output_wav), wave, sr)
@@ -445,12 +463,31 @@ def synthesize_telegram_voice(
     output_ogg: Path,
     *,
     prefer_local_clone: bool = True,
+    profile_override: str | None = None,
 ) -> VoiceResult:
     """Synthesize spoken Russian text into a Telegram-ready OGG/Opus voice message."""
     spoken_text = normalize_text_for_speech(raw_text)
     profiles = load_voice_profiles()
     edge_voice = str(profiles.get("edge_voice") or "ru-RU-DmitryNeural")
-    voice_name, ref_audio, ref_transcript = get_active_voice_reference()
+    if profile_override:
+        profiles_copy = {**profiles, "active": profile_override}
+        entry = (profiles_copy.get("profiles") or {}).get(profile_override) or {}
+        audio_path = VOICES_DIR / str(entry.get("audio", "default.wav"))
+        txt_path = VOICES_DIR / str(entry.get("transcript_file", "default.txt"))
+        if audio_path.is_file():
+            voice_name = profile_override
+            ref_audio = audio_path
+            ref_transcript = (
+                txt_path.read_text(encoding="utf-8").strip() if txt_path.is_file() else "Привет."
+            )
+            profile_meta = entry
+        else:
+            voice_name, ref_audio, ref_transcript, profile_meta = get_active_voice_reference()
+    else:
+        voice_name, ref_audio, ref_transcript, profile_meta = get_active_voice_reference()
+
+    speed = float(profile_meta.get("speed", 1.02))
+    audio_fx = profile_meta.get("ffmpeg_fx") or None
 
     raw_wav = output_ogg.with_suffix(".wav")
     raw_mp3 = output_ogg.with_suffix(".mp3")
@@ -459,17 +496,17 @@ def synthesize_telegram_voice(
     try:
         if prefer_local_clone:
             try:
-                _synthesize_f5_raw(spoken_text, ref_audio, ref_transcript, raw_wav)
-                convert_to_telegram_ogg(raw_wav, output_ogg)
+                _synthesize_f5_raw(spoken_text, ref_audio, ref_transcript, raw_wav, speed=speed)
+                convert_to_telegram_ogg(raw_wav, output_ogg, audio_fx=audio_fx)
                 backend = "f5_tts_ru"
             except Exception as exc:
                 LOGGER.warning("F5-TTS synthesis failed (%s), falling back to edge-tts", exc)
                 _synthesize_edge_tts_raw(spoken_text, raw_mp3, voice=edge_voice)
-                convert_to_telegram_ogg(raw_mp3, output_ogg)
+                convert_to_telegram_ogg(raw_mp3, output_ogg, audio_fx=audio_fx)
                 backend = "edge_tts"
         else:
             _synthesize_edge_tts_raw(spoken_text, raw_mp3, voice=edge_voice)
-            convert_to_telegram_ogg(raw_mp3, output_ogg)
+            convert_to_telegram_ogg(raw_mp3, output_ogg, audio_fx=audio_fx)
     finally:
         for tmp in (raw_wav, raw_mp3):
             if tmp.is_file():

@@ -194,6 +194,20 @@ def is_muted(path: Path = DEFAULT_DATABASE) -> bool:
     return bool(value and value["value"] == "1")
 
 
+def set_bot_setting(key: str, value: str, path: Path = DEFAULT_DATABASE) -> None:
+    with connect(path) as database:
+        database.execute(
+            "insert or replace into settings(key, value) values(?, ?)",
+            (key, value),
+        )
+
+
+def get_bot_settings(path: Path = DEFAULT_DATABASE) -> dict[str, str]:
+    with connect(path) as database:
+        rows = database.execute("select key, value from settings").fetchall()
+    return {str(row["key"]): str(row["value"]) for row in rows}
+
+
 def remember_participant(
     user_id: int,
     username: str | None,
@@ -472,12 +486,11 @@ def claim(database: sqlite3.Connection, *, max_batch: int = 10) -> dict[str, Any
     last_bot_reply_at = state_row["last_bot_reply_at"] if state_row else None
 
     payload = dict(primary)
-    configured_group = database.execute(
-        "select value from settings where key='chat_id'"
-    ).fetchone()
+    all_settings = dict(database.execute("select key, value from settings").fetchall())
     payload["configured_group_id"] = (
-        int(configured_group["value"]) if configured_group else None
+        int(all_settings["chat_id"]) if all_settings.get("chat_id") else None
     )
+    payload["bot_settings"] = all_settings
     source = "личный диалог" if chat_id > 0 else "группа"
     # Exclude primary itself from history before primary so it doesn't duplicate;
     # full history up to primary - 1 gives complete prior conversation.

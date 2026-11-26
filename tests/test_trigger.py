@@ -60,3 +60,27 @@ def test_build_reply_prompt_focuses_batch_and_enforces_voice_format(tmp_path: Pa
     assert "full-context.jsonl" in prompt_text
     assert "Блендер лагает" in prompt_text
     assert "Сколько сэмплов ставил?" in prompt_text
+
+
+def test_persona_and_grok_response_extraction(tmp_path: Path) -> None:
+    from tg_bot.llm_client import _extract_grok_response
+    from tg_bot.personas import get_persona_prompt
+
+    assert "Дед Геннадий" in get_persona_prompt("ded")
+    assert "Демон" in get_persona_prompt("demon") or "демон" in get_persona_prompt("demon")
+    assert _extract_grok_response('{"response": "ОК"}') == "ОК"
+
+    p = build_reply_prompt(
+        {
+            "chat_id": -100,
+            "message_id": 1,
+            "context": [],
+            "bot_settings": {"persona": "ded"},
+        },
+        decision=TriggerDecision(True, "reply", "тест", (1,)),
+        unanswered=[{"message_id": 1, "sender_name": "А", "text": "Привет"}],
+        attachment=None,
+        context_attachments=(),
+        work_dir=tmp_path,
+    )
+    assert "Дед Геннадий" in p

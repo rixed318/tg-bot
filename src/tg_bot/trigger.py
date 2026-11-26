@@ -11,12 +11,13 @@ import subprocess
 from typing import Any
 
 from tg_bot.config import (
-    AGY_BIN,
     GROUP_COOLDOWN_SECONDS,
     INLINE_HISTORY_LIMIT,
     TRIGGER_MODEL,
     read_bot_username,
 )
+from tg_bot.llm_client import run_llm_prompt
+from tg_bot.personas import get_persona_prompt
 
 # Strict word-boundary bot name triggers (avoid substring false-positives like "ситуации" or "работа").
 BOT_NAME_PATTERN = re.compile(
@@ -268,29 +269,16 @@ def evaluate_trigger(
 Верни СТРОГО один JSON-объект без пояснений вокруг:
 {{"should_reply": true или false, "reason": "краткая причина на русском", "target_message_ids": [список msg_id из неотвеченных, которые стоит объединить в одном ГС, либо [] если should_reply=false]}}"""
 
-    command = [
-        str(AGY_BIN),
-        "--dangerously-skip-permissions",
-        "--model",
-        TRIGGER_MODEL,
-        "--output-format",
-        "json",
-        "--print-timeout",
-        "90s",
-        f"--print={classifier_prompt}",
-    ]
-    result = subprocess.run(
-        command,
-        cwd=work_dir,
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=120,
+    bot_settings = task.get("bot_settings") or {}
+    ai_model = str(bot_settings.get("ai_model") or "").strip()
+    trigger_model = ai_model if ai_model.startswith("grok") else TRIGGER_MODEL
+    raw_out = run_llm_prompt(
+        classifier_prompt,
+        work_dir=work_dir,
+        model_id=trigger_model,
+        timeout_seconds=90,
     )
-    payload = json.loads(result.stdout)
-    if payload.get("status") != "SUCCESS":
-        raise RuntimeError(f"trigger classifier failed: {payload.get('status')}")
-    return parse_trigger_json(str(payload.get("response") or ""), available_ids)
+    return parse_trigger_json(raw_out, available_ids)
 
 
 def build_reply_prompt(
@@ -333,8 +321,12 @@ def build_reply_prompt(
         else "Недавних медиа-вложений из контекста нет."
     )
     chat_kind = "личный диалог" if int(task.get("chat_id") or 0) > 0 else "группа «Блендер»"
+    bot_settings = task.get("bot_settings") or {}
+    persona_id = str(bot_settings.get("persona") or "default")
+    persona_desc = get_persona_prompt(persona_id)
 
-    return f"""Ты — Тау бао, харизматичный и шарящий за 3D / Blender / IT собеседник в Telegram ({chat_kind}).
+    return f"""{persona_desc}
+Ты общаешься в Telegram ({chat_kind}).
 ВАЖНЕЙШЕЕ ПРАВИЛО ФОРМАТА:
 Ты общаешься ИСКЛЮЧИТЕЛЬНО ГОЛОСОВЫМИ СООБЩЕНИЯМИ! Весь твой текстовый ответ будет прочитан вслух нейросетью-озвучкой.
 Поэтому:

@@ -8,6 +8,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 AGY_BIN = Path(os.environ.get("TG_BOT_AGY_BIN", "/home/rus/.local/bin/agy-proxy"))
+GROK_BIN = Path(os.environ.get("TG_BOT_GROK_BIN", "/home/rus/.local/bin/grok"))
 TRIGGER_MODEL = os.environ.get("TG_BOT_TRIGGER_MODEL", "gemini-4-hydrogen-medium")
 REPLY_MODEL = os.environ.get("TG_BOT_REPLY_MODEL", "gemini-4-hydrogen-high")
 WHISPER_MODEL = os.environ.get("TG_BOT_WHISPER_MODEL", "large-v3-turbo")
