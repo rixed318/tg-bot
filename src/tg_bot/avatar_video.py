@@ -349,11 +349,12 @@ def render_talking_avatar_mp4(
     output_mp4: Path,
     *,
     avatar_dir: Path,
+    output_audio_path: Path | None = None,
     emotion: str = "neutral",
     size: int = AVATAR_SIZE,
     fps: int = AVATAR_FPS,
 ) -> tuple[Path, int]:
-    """Render a square H.264/AAC talking-avatar MP4 suitable for Telegram sendVideoNote."""
+    """Render a talking avatar, optionally driving its mouth from an isolated vocal."""
     output_mp4.parent.mkdir(parents=True, exist_ok=True)
     sprites = _load_sprite_frames(avatar_dir, emotion, size=size)
     levels, states, duration = compute_smoothed_envelope(audio_path, fps=fps)
@@ -374,7 +375,7 @@ def render_talking_avatar_mp4(
         "-i",
         "-",
         "-i",
-        str(audio_path),
+        str(output_audio_path or audio_path),
         "-c:v",
         "libx264",
         "-preset",

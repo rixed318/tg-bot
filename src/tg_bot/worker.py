@@ -47,6 +47,11 @@ from tg_bot.media_tools import (
     run_sticker_or_gif,
     save_chat_video,
 )
+from tg_bot.singing_cover import (
+    build_singing_cover,
+    is_singing_cover_request,
+    resolve_singing_reference,
+)
 from tg_bot.telegram_api import (
     copy_current_message_to_group,
     download_telegram_file,
@@ -59,7 +64,7 @@ from tg_bot.telegram_api import (
     send_video_note,
     send_voice,
 )
-from tg_bot.transcribe import transcribe_audio
+from tg_bot.transcribe import release_cached_model, transcribe_audio
 from tg_bot.trigger import (
     TriggerDecision,
     build_reply_prompt,
@@ -251,6 +256,84 @@ def _ask_gemini_reply(
         model_id=model_id,
         timeout_seconds=timeout_seconds,
     )
+
+
+def _send_singing_cover_reply(
+    token: str,
+    task: dict[str, Any],
+    attachment: Path,
+    work_dir: Path,
+    *,
+    reply_to_message_id: int,
+) -> tuple[list[int], str]:
+    """Build a singing cover and deliver it as sequential <=60s video notes."""
+    profiles = load_voice_profiles()
+    settings = task.get("bot_settings") or {}
+    voice_name, reference_voice = resolve_singing_reference(settings, profiles)
+    release_cached_model()
+
+    stop_pulse = threading.Event()
+
+    def _pulse() -> None:
+        while not stop_pulse.wait(4.0):
+            send_chat_action(token, task, "upload_video")
+
+    pulse_thread = threading.Thread(target=_pulse, name="singing-cover-action", daemon=True)
+    send_chat_action(token, task, "record_video_note")
+    pulse_thread.start()
+    try:
+        artifacts = build_singing_cover(
+            attachment,
+            reference_voice,
+            work_dir / "singing-cover",
+        )
+        persona_name = str(settings.get("persona") or "").strip() or None
+        speech_display = str(settings.get("speech_display") or "quality")
+        avatar_dir = resolve_avatar_dir(
+            voice_name,
+            profiles,
+            persona_name=persona_name,
+            speech_display=speech_display,
+        )
+
+        message_ids: list[int] = []
+        reply_id: int | None = reply_to_message_id
+        for index, (vocal_chunk, mixed_chunk) in enumerate(
+            zip(artifacts.vocal_chunks, artifacts.mixed_chunks), start=1
+        ):
+            video_path = work_dir / f"singing_cover_{task['id']}_{index:02d}.mp4"
+            rendered, duration = render_talking_avatar_mp4(
+                vocal_chunk,
+                video_path,
+                avatar_dir=avatar_dir,
+                output_audio_path=mixed_chunk,
+                emotion="happy",
+            )
+            message_id = send_video_note(
+                token,
+                task,
+                rendered,
+                duration_seconds=duration,
+                reply_to_message_id=reply_id,
+            )
+            message_ids.append(message_id)
+            reply_id = message_id
+            archive_on_drive(
+                rendered,
+                task,
+                category="singing_covers",
+                stable_key=f"singing-cover:{task['id']}:{index}",
+            )
+        archive_on_drive(
+            artifacts.mixed_audio,
+            task,
+            category="singing_covers",
+            stable_key=f"singing-cover:{task['id']}:audio",
+        )
+        return message_ids, voice_name
+    finally:
+        stop_pulse.set()
+        pulse_thread.join(timeout=2)
 
 
 def _send_voice_reply(
@@ -546,6 +629,42 @@ def process_one(token: str) -> bool:
             # 1. Read & transcribe incoming voice/audio messages FIRST and persist to DB/Drive!
             attachment = _transcribe_unanswered_audio(token, task, unanswered, work_dir)
             user_text = str(task.get("text") or "")
+
+            if (
+                attachment is not None
+                and attachment.suffix.lower() in AUDIO_SUFFIXES
+                and is_singing_cover_request(unanswered)
+            ):
+                anchor_message_id = max(
+                    int(item.get("message_id") or 0) for item in unanswered
+                )
+                message_ids, singing_voice = _send_singing_cover_reply(
+                    token,
+                    task,
+                    attachment,
+                    work_dir,
+                    reply_to_message_id=anchor_message_id,
+                )
+                archive_text = (
+                    f"[singing-cover voice={singing_voice} parts={len(message_ids)}]"
+                )
+                remote_queue(
+                    "complete",
+                    "--ids",
+                    ",".join(claimed_ids),
+                    "--response-base64",
+                    encoded(archive_text),
+                    "--flag",
+                    "reply",
+                    "--reason-base64",
+                    encoded("полный singing-cover по исходному треку"),
+                    "--answered-up-to",
+                    str(anchor_message_id),
+                    "--primary-id",
+                    str(task["id"]),
+                )
+                _schedule_drive_sync()
+                return True
 
             # 2. Download recent visual context attachments if needed and write UNLIMITED full-context.jsonl
             needs_visual = bool(

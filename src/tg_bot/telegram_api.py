@@ -6,6 +6,7 @@ import json
 import mimetypes
 from pathlib import Path
 import secrets
+import time
 from typing import Any
 import urllib.parse
 import urllib.request
@@ -56,21 +57,41 @@ def download_telegram_file(
     token: str, file_id: str, work_dir: Path, stem: str = "input"
 ) -> Path:
     """Download an incoming Telegram attachment up to configured size limits."""
-    with urllib.request.urlopen(
+    metadata_url = (
         f"https://api.telegram.org/bot{token}/getFile?"
-        + urllib.parse.urlencode({"file_id": file_id}),
-        timeout=20,
-    ) as response:
-        file_path = str(json.load(response)["result"]["file_path"])
+        + urllib.parse.urlencode({"file_id": file_id})
+    )
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(metadata_url, timeout=30) as response:
+                file_path = str(json.load(response)["result"]["file_path"])
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(2**attempt)
+    else:
+        assert last_error is not None
+        raise last_error
     suffix = Path(file_path).suffix.lower()
     if suffix not in MEDIA_SUFFIXES:
         suffix = ".jpg"
     target = work_dir / f"{stem}{suffix}"
     limit = MAX_MEDIA_BYTES if suffix in (VIDEO_SUFFIXES | AUDIO_SUFFIXES) else MAX_PHOTO_BYTES
-    with urllib.request.urlopen(
-        f"https://api.telegram.org/file/bot{token}/{file_path}", timeout=60
-    ) as response:
-        data = response.read(limit + 1)
+    media_url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(media_url, timeout=120) as response:
+                data = response.read(limit + 1)
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(2**attempt)
+    else:
+        assert last_error is not None
+        raise last_error
     if len(data) > limit:
         raise ValueError(f"Telegram media exceeds {limit // (1024 * 1024)} MB")
     target.write_bytes(data)

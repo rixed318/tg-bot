@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 import subprocess
 import threading
+import gc
 
 from tg_bot.config import FFMPEG_BIN, WHISPER_MODEL
 
@@ -13,6 +14,20 @@ LOGGER = logging.getLogger("tg_bot.transcribe")
 _MODEL_LOCK = threading.Lock()
 _CACHED_MODEL = None
 _FORCE_CPU = False
+
+
+def release_cached_model() -> None:
+    """Release Whisper before a separate GPU-heavy singing conversion process."""
+    global _CACHED_MODEL
+    _CACHED_MODEL = None
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
 
 
 def _get_model(*, force_cpu: bool = False):

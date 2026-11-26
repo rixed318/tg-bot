@@ -16,6 +16,18 @@ RCLONE_BIN = Path(os.environ.get("TG_BOT_RCLONE_BIN", "/home/rus/.local/bin/rclo
 FFMPEG_BIN = os.environ.get("TG_BOT_FFMPEG_BIN", "ffmpeg")
 FFPROBE_BIN = os.environ.get("TG_BOT_FFPROBE_BIN", "ffprobe")
 
+SINGING_ENGINE_ROOT = Path(
+    os.environ.get("TG_BOT_SINGING_ENGINE_ROOT", "/home/rus/dev/seed-vc")
+)
+SINGING_ENGINE_PYTHON = Path(
+    os.environ.get(
+        "TG_BOT_SINGING_ENGINE_PYTHON",
+        str(SINGING_ENGINE_ROOT / ".venv" / "bin" / "python"),
+    )
+)
+SINGING_DIFFUSION_STEPS = int(os.environ.get("TG_BOT_SINGING_STEPS", "30"))
+SINGING_CHUNK_SECONDS = int(os.environ.get("TG_BOT_SINGING_CHUNK_SECONDS", "55"))
+
 ENV_FILE = Path(
     os.environ.get("TG_BOT_ENV_FILE", str(Path.home() / ".config" / "rixed-joke-bot" / "env"))
 )

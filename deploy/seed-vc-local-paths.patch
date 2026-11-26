@@ -1,0 +1,26 @@
+diff --git a/inference.py b/inference.py
+index 84d673b..81beb50 100644
+--- a/inference.py
++++ b/inference.py
+@@ -57,7 +57,9 @@ def load_models(args):
+         # f0 extractor
+         from modules.rmvpe import RMVPE
+ 
+-        model_path = load_custom_model_from_hf("lj1995/VoiceConversionWebUI", "rmvpe.pt", None)
++        model_path = os.environ.get("SEED_VC_RMVPE_PATH") or load_custom_model_from_hf(
++            "lj1995/VoiceConversionWebUI", "rmvpe.pt", None
++        )
+         f0_extractor = RMVPE(model_path, is_half=False, device=device)
+         f0_fn = f0_extractor.infer_from_audio
+ 
+@@ -85,7 +87,9 @@ def load_models(args):
+     # Load additional modules
+     from modules.campplus.DTDNN import CAMPPlus
+ 
+-    campplus_ckpt_path = load_custom_model_from_hf(
++    campplus_ckpt_path = os.environ.get(
++        "SEED_VC_CAMPPLUS_PATH"
++    ) or load_custom_model_from_hf(
+         "funasr/campplus", "campplus_cn_common.bin", config_filename=None
+     )
+     campplus_model = CAMPPlus(feat_dim=80, embedding_size=192)
