@@ -132,8 +132,9 @@ def resolve_avatar_dir(
     profiles_data: dict[str, Any],
     *,
     persona_name: str | None = None,
+    speech_display: str = "quality",
 ) -> Path:
-    """Resolve sprite directory for persona or voice profile, falling back to default pixel-art."""
+    """Resolve sprite directory for persona or voice profile, respecting speech_display mode."""
     profiles = profiles_data.get("profiles") or {}
     candidates: list[str] = []
     if persona_name and persona_name.strip():
@@ -141,7 +142,12 @@ def resolve_avatar_dir(
     if profile_name and profile_name.strip() and profile_name.strip() not in candidates:
         candidates.append(profile_name.strip())
 
+    funny_mode = speech_display.strip().lower() == "funny"
     for name in candidates:
+        if funny_mode:
+            funny_dir = VOICES_DIR / "avatars" / f"{name}_funny"
+            if funny_dir.is_dir() and (funny_dir / "neutral_closed.png").is_file():
+                return funny_dir
         entry = profiles.get(name) or {}
         rel_dir = entry.get("avatar_dir")
         if rel_dir:

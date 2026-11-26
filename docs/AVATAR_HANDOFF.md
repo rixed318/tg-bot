@@ -1,4 +1,27 @@
-# Avatar Animation Handoff & Roadmap (Option 2)
+# Avatar Animation Handoff & Roadmap
+
+## Speech display modes (implemented)
+
+`/commands` now exposes **Отображение речи** independently from the
+voice/video-note format:
+
+- `quality` — polished generated 2D pixel-art sprites. This is the default.
+- `funny` — the original MediaPipe/OpenCV photo sprites kept in sibling
+  `<character>_funny` directories.
+
+The setting is stored as `speech_display` in the shared queue database and is
+included in every claimed task. The local worker passes it to
+`resolve_avatar_dir()`. For funny mode the resolver first tries
+`voices/avatars/<persona>_funny`, then `<voice>_funny`; if a funny variant does
+not exist it safely falls back to the normal profile avatar.
+
+The generated 4x7 sheets use this fixed row layout:
+
+1. `neutral`, 2. `happy`, 3. `angry`, 4. `laugh`, 5. `shock`, 6. `sad`;
+each row is `closed`, `half`, `open`, `blink`. Row 7 contains
+`neutral_wink`, `flirty_wink_open`, `brows_up_open`, and one unused cell.
+Run `scripts/split_avatar_sheet.py SHEET OUTPUT_DIR` to produce the renderer's
+27 files at 384x384.
 
 ## Current State (Option 1 — Smooth 2D Sprite Engine)
 Implemented in `src/tg_bot/avatar_video.py`:
@@ -6,7 +29,7 @@ Implemented in `src/tg_bot/avatar_video.py`:
 - Continuous crossfade blending between `closed` ↔ `half` ↔ `open` (and smooth 5-frame blink transitions) instead of hard frame cuts.
 - Smooth continuous head breathing, sway, and speech-driven nod using `1.5%+` overscan affine transforms (no jerky `np.roll` jumps).
 
-## Option 2 Roadmap — Per-Avatar Neural / Viseme Optimization (RTX 4060 8 GB)
+## Neural / Viseme optimization roadmap (RTX 4060 8 GB)
 
 ### 1. Per-Character Optimization Goals
 - **Phoneme / Viseme Alignment (Произношение букв):**
@@ -17,8 +40,10 @@ Implemented in `src/tg_bot/avatar_video.py`:
     - reference face crop / landmark bounding box,
     - emotion intensity multipliers (`laugh`, `angry`, `sad`, `shock`, `happy`),
     - idle head pose / blink cadence / smile baseline.
-- **Format Toggle in `/commands`:**
-  - Extend `avatar_enabled` in `gateway.py` / `queue_db.py` into `avatar_mode`: `off` (voice-only), `2d` (fast smooth 2D), `neural` (LivePortrait / MuseTalk).
+- **Future neural mode in `/commands`:**
+  - Keep `avatar_enabled` for voice-only vs video-note and `speech_display` for
+    quality vs funny 2D. Add a separate neural renderer value only when
+    LivePortrait / MuseTalk is production-ready.
 
 ### 2. GPU Memory Strategy (RTX 4060 8 GB VRAM)
 - `F5-TTS` holds ~1.5–2.5 GB VRAM during synthesis.

@@ -61,3 +61,26 @@ def test_resolve_avatar_dir_prefers_persona_over_voice() -> None:
     }
     resolved = avatar_video.resolve_avatar_dir("arsen", profiles, persona_name="anya")
     assert resolved.name == "anya"
+
+
+def test_resolve_avatar_dir_uses_funny_variant_when_requested(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    quality_dir = tmp_path / "avatars" / "artem"
+    funny_dir = tmp_path / "avatars" / "artem_funny"
+    quality_dir.mkdir(parents=True)
+    funny_dir.mkdir(parents=True)
+    (quality_dir / "neutral_closed.png").touch()
+    (funny_dir / "neutral_closed.png").touch()
+    monkeypatch.setattr(avatar_video, "VOICES_DIR", tmp_path)
+    profiles = {"profiles": {"artem": {"avatar_dir": "avatars/artem"}}}
+
+    quality = avatar_video.resolve_avatar_dir(
+        "artem", profiles, speech_display="quality"
+    )
+    funny = avatar_video.resolve_avatar_dir(
+        "artem", profiles, speech_display="funny"
+    )
+
+    assert quality == quality_dir
+    assert funny == funny_dir

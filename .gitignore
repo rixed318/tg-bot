@@ -9,6 +9,7 @@ __pycache__/
 *.session*
 .pytest_cache/
 .ruff_cache/
+.cache/
 data/
 tmp/
 dist/
