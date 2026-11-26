@@ -50,11 +50,16 @@ def transcribe_audio(audio_path: Path, *, language: str | None = None) -> str:
         source = audio_path
 
     try:
+        import soundfile as sf
+
+        audio_data, sample_rate = sf.read(str(source), dtype="float32", always_2d=False)
+        if getattr(audio_data, "ndim", 1) > 1:
+            audio_data = audio_data.mean(axis=1)
         model = _get_model()
         kwargs: dict[str, object] = {"beam_size": 2}
         if language:
             kwargs["language"] = language
-        segments, _ = model.transcribe(str(source), **kwargs)
+        segments, _ = model.transcribe(audio_data, **kwargs)
         return " ".join(seg.text.strip() for seg in segments).strip()
     finally:
         if wav_path.is_file():
