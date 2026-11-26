@@ -48,6 +48,10 @@ LOGGER = logging.getLogger("rixed-joke-bot")
 CHARACTER_CATALOG: list[tuple[str, str]] = [
     ("default", "Тау бао"),
     ("anya", "Аня"),
+    ("artem", "Артём"),
+    ("karina", "Карина"),
+    ("ksyusha", "Ксюша"),
+    ("katya", "Катя"),
     ("ded", "Дед Геннадий"),
     ("gopnik", "Гопник"),
     ("anime", "Анимешница"),

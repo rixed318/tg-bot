@@ -154,6 +154,53 @@
       "transcript_file": "demon.txt",
       "speed": 0.9,
       "ffmpeg_fx": "asetrate=24000*0.88067,aresample=24000,atempo=1.13550,aecho=0.8:0.85:45|85:0.35|0.25,equalizer=f=95:width_type=o:width=1.5:g=5"
+    },
+    "artem": {
+      "label": "Артём",
+      "aliases": [
+        "артем",
+        "артём",
+        "artem"
+      ],
+      "audio": "default.wav",
+      "transcript_file": "default.txt",
+      "avatar_dir": "avatars/artem",
+      "speed": 1.04
+    },
+    "karina": {
+      "label": "Карина",
+      "aliases": [
+        "карина",
+        "karina"
+      ],
+      "audio": "masha.wav",
+      "transcript_file": "masha.txt",
+      "avatar_dir": "avatars/karina",
+      "speed": 0.99,
+      "ffmpeg_fx": "equalizer=f=240:width_type=o:width=1.5:g=2"
+    },
+    "ksyusha": {
+      "label": "Ксюша",
+      "aliases": [
+        "ксюша",
+        "ksyusha"
+      ],
+      "audio": "masha.wav",
+      "transcript_file": "masha.txt",
+      "avatar_dir": "avatars/ksyusha",
+      "speed": 1.05,
+      "ffmpeg_fx": "equalizer=f=2800:width_type=o:width=1.5:g=2"
+    },
+    "katya": {
+      "label": "Катя",
+      "aliases": [
+        "катя",
+        "katya"
+      ],
+      "audio": "altushka.wav",
+      "transcript_file": "altushka.txt",
+      "avatar_dir": "avatars/katya",
+      "speed": 0.98
     }
   }
 }
