@@ -5,9 +5,31 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 
 from tg_bot.config import AGY_BIN, GROK_BIN
+
+_META_PREAMBLE_RE = re.compile(
+    r"^(?:"
+    r"(?:сначала|сейчас|щас|давай|пойду|надо|нужно|попробую|могу|давайте)\s+"
+    r"(?:гляну|посмотрю|проверю|открою|прочитаю|изучу|поищу|чекну)\s+"
+    r"(?:историю|контекст|чат|файл|сообщения|переписку|full-context)[^.!?\n]*[.!?\n]+"
+    r"|(?:i['’]?ll|let me|first,? i['’]?ll)\s+(?:check|read|look at|inspect)\s+[^.!?\n]*[.!?\n]+"
+    r")\s*",
+    flags=re.IGNORECASE,
+)
+
+
+def strip_meta_thoughts(text: str) -> str:
+    """Strip accidental model pre-tool 'thinking aloud' preambles before the spoken reply."""
+    cleaned = text.strip()
+    for _ in range(3):
+        updated = _META_PREAMBLE_RE.sub("", cleaned, count=1).strip()
+        if updated == cleaned:
+            break
+        cleaned = updated
+    return cleaned
 
 
 def _extract_grok_response(stdout: str) -> str:
@@ -23,7 +45,7 @@ def _extract_grok_response(stdout: str) -> str:
             for key in ("response", "result", "text", "content", "output_text"):
                 val = data.get(key)
                 if isinstance(val, str) and val.strip():
-                    return val.strip()
+                    return strip_meta_thoughts(val)
     except json.JSONDecodeError:
         pass
 
@@ -42,8 +64,8 @@ def _extract_grok_response(stdout: str) -> str:
             for key in ("response", "result", "text", "content", "output_text"):
                 val = obj.get(key)
                 if isinstance(val, str) and val.strip():
-                    return val.strip()
-    return text
+                    return strip_meta_thoughts(val)
+    return strip_meta_thoughts(text)
 
 
 def run_llm_prompt(
@@ -100,4 +122,4 @@ def run_llm_prompt(
     payload = json.loads(result.stdout)
     if payload.get("status") != "SUCCESS":
         raise RuntimeError(f"agy returned {payload.get('status')}")
-    return str(payload.get("response") or "").strip()
+    return strip_meta_thoughts(str(payload.get("response") or ""))

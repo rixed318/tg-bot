@@ -84,3 +84,13 @@ def test_persona_and_grok_response_extraction(tmp_path: Path) -> None:
         work_dir=tmp_path,
     )
     assert "Дед Геннадий" in p
+
+
+def test_strip_meta_thoughts() -> None:
+    from tg_bot.llm_client import strip_meta_thoughts
+
+    raw = (
+        "Сначала гляну историю чата, чтобы ответить в том же тоне.\n"
+        "Ну наконец-то без лишней болтовни."
+    )
+    assert strip_meta_thoughts(raw) == "Ну наконец-то без лишней болтовни."
