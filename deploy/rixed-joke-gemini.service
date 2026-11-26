@@ -1,0 +1,16 @@
+[Unit]
+Description=Local voice-first Gemini worker for the Blender Telegram bot
+After=network-online.target agy-proxy-chain.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/rus/dev/tg-bot
+Environment=PYTHONPATH=/home/rus/dev/tg-bot/src
+ExecStart=/home/rus/dev/tg-bot/.venv/bin/python -m tg_bot.worker
+Restart=always
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=default.target

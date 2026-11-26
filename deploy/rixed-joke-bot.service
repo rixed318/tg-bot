@@ -1,0 +1,22 @@
+[Unit]
+Description=Separate Telegram gateway for the Blender voice-first Gemini bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/rixed-joke-bot
+EnvironmentFile=/etc/rixed-joke-bot/env
+ExecStart=/opt/rixed/telegram-courier/.venv/bin/python /opt/rixed-joke-bot/joke_bot_gateway.py
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/rixed-joke-bot
+
+[Install]
+WantedBy=multi-user.target

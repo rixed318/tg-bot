@@ -1,0 +1,16 @@
+[Unit]
+Description=Premium Telegram media archive for the Blender group
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/rus/dev/tg-bot
+Environment=PYTHONPATH=/home/rus/dev/tg-bot/src
+ExecStart=/home/rus/.local/share/rixed-joke-userbot/venv/bin/python /home/rus/dev/tg-bot/src/tg_bot/premium_archive.py
+Restart=always
+RestartSec=10
+UMask=0077
+
+[Install]
+WantedBy=default.target

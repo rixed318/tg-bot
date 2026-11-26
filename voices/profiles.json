@@ -1,0 +1,16 @@
+{
+  "active": "default",
+  "edge_voice": "ru-RU-DmitryNeural",
+  "profiles": {
+    "default": {
+      "label": "Дима (студийный мужской)",
+      "audio": "default.wav",
+      "transcript_file": "default.txt"
+    },
+    "masha": {
+      "label": "Маша (студийный женский)",
+      "audio": "masha.wav",
+      "transcript_file": "masha.txt"
+    }
+  }
+}
