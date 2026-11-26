@@ -127,17 +127,31 @@ def ensure_default_avatar_sprites(avatar_dir: Path) -> Path:
     return avatar_dir
 
 
-def resolve_avatar_dir(profile_name: str, profiles_data: dict[str, Any]) -> Path:
-    """Resolve sprite directory for a voice profile, falling back to default pixel-art."""
-    entry = (profiles_data.get("profiles") or {}).get(profile_name) or {}
-    rel_dir = entry.get("avatar_dir")
-    if rel_dir:
-        candidate = VOICES_DIR / str(rel_dir)
-        if candidate.is_dir() and (candidate / "neutral_closed.png").is_file():
-            return candidate
-    custom_dir = VOICES_DIR / "avatars" / profile_name
-    if custom_dir.is_dir() and (custom_dir / "neutral_closed.png").is_file():
-        return custom_dir
+def resolve_avatar_dir(
+    profile_name: str,
+    profiles_data: dict[str, Any],
+    *,
+    persona_name: str | None = None,
+) -> Path:
+    """Resolve sprite directory for persona or voice profile, falling back to default pixel-art."""
+    profiles = profiles_data.get("profiles") or {}
+    candidates: list[str] = []
+    if persona_name and persona_name.strip():
+        candidates.append(persona_name.strip())
+    if profile_name and profile_name.strip() and profile_name.strip() not in candidates:
+        candidates.append(profile_name.strip())
+
+    for name in candidates:
+        entry = profiles.get(name) or {}
+        rel_dir = entry.get("avatar_dir")
+        if rel_dir:
+            candidate = VOICES_DIR / str(rel_dir)
+            if candidate.is_dir() and (candidate / "neutral_closed.png").is_file():
+                return candidate
+        custom_dir = VOICES_DIR / "avatars" / name
+        if custom_dir.is_dir() and (custom_dir / "neutral_closed.png").is_file():
+            return custom_dir
+
     default_dir = VOICES_DIR / "avatars" / "default"
     return ensure_default_avatar_sprites(default_dir)
 

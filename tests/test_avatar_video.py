@@ -50,3 +50,14 @@ def test_parse_emotion_directive(tmp_path: Path) -> None:
     parsed = parse_agent_response("Ну ты даёшь, конечно!\n[[emotion:laugh]]", tmp_path)
     assert parsed.text == "Ну ты даёшь, конечно!"
     assert parsed.emotion == "laugh"
+
+
+def test_resolve_avatar_dir_prefers_persona_over_voice() -> None:
+    profiles = {
+        "profiles": {
+            "anya": {"avatar_dir": "avatars/anya"},
+            "arsen": {"audio": "arsen.wav"},
+        }
+    }
+    resolved = avatar_video.resolve_avatar_dir("arsen", profiles, persona_name="anya")
+    assert resolved.name == "anya"

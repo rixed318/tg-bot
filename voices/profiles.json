@@ -128,8 +128,7 @@
       ],
       "audio": "arsen.wav",
       "transcript_file": "arsen.txt",
-      "speed": 1.03,
-      "ffmpeg_fx": "asetrate=24000*0.95484,aresample=24000,atempo=1.04729,acompressor=threshold=-13dB:ratio=4,equalizer=f=160:width_type=o:width=1.5:g=3"
+      "speed": 1.0
     },
     "kot": {
       "label": "Кот",

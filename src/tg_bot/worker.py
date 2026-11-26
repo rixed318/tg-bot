@@ -280,7 +280,12 @@ def _send_voice_reply(
     mid: int | None = None
     if avatar_enabled:
         try:
-            avatar_dir = resolve_avatar_dir(voice_res.voice_name, profiles)
+            persona_name = str(bot_settings.get("persona") or "").strip() or None
+            avatar_dir = resolve_avatar_dir(
+                voice_res.voice_name,
+                profiles,
+                persona_name=persona_name,
+            )
             mp4_path = work_dir / f"avatar_{task['id']}.mp4"
             rendered_mp4, vid_dur = render_talking_avatar_mp4(
                 voice_res.ogg_path,
