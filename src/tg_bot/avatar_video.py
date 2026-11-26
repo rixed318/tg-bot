@@ -202,6 +202,9 @@ def _load_sprite_frames(
     wink = _pick_optional([f"{emo}_wink.png", "neutral_wink.png"])
     if wink is not None:
         frames["wink"] = wink
+    wink_open = _pick_optional([f"{emo}_wink_open.png", "flirty_wink_open.png"])
+    if wink_open is not None:
+        frames["wink_open"] = wink_open
     brows_up = _pick_optional([f"{emo}_brows_up.png", "brows_up_open.png", "neutral_brows_up.png"])
     if brows_up is not None:
         frames["brows_up"] = brows_up
@@ -292,9 +295,13 @@ def _blend_mouth_frame(
     if blink_weight > 0.01:
         bw = max(0.0, min(1.0, blink_weight))
         blended = blended * (1.0 - bw) + sprites["blink"].astype(np.float32) * bw
-    if wink_weight > 0.01 and "wink" in sprites:
+    if wink_weight > 0.01 and ("wink" in sprites or "wink_open" in sprites):
         ww = max(0.0, min(1.0, wink_weight))
-        blended = blended * (1.0 - ww) + sprites["wink"].astype(np.float32) * ww
+        if "wink_open" in sprites and "wink" in sprites:
+            wink_img = sprites["wink"].astype(np.float32) * (1.0 - lvl) + sprites["wink_open"].astype(np.float32) * lvl
+        else:
+            wink_img = sprites.get("wink_open", sprites.get("wink")).astype(np.float32)
+        blended = blended * (1.0 - ww) + wink_img * ww
     return np.clip(blended, 0, 255).astype(np.uint8)
 
 
@@ -407,9 +414,9 @@ def render_talking_avatar_mp4(
                 1.0 if state == "blink" else 0.0
             )
             wink_w = 0.0
-            if emotion in ("happy", "laugh") and "wink" in sprites:
+            if emotion in ("happy", "laugh") and ("wink" in sprites or "wink_open" in sprites):
                 w_phase = (idx + fps) % wink_period
-                if w_phase < len(wink_curve) and level < 0.35:
+                if w_phase < len(wink_curve):
                     wink_w = wink_curve[w_phase]
                     blink_w = 0.0
             brows_w = max(0.0, (level - 0.62) / 0.38) if "brows_up" in sprites else 0.0
