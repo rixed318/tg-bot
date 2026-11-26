@@ -313,26 +313,20 @@ def _apply_smooth_motion(
     emotion: str,
     size: int,
 ) -> bytes:
-    """Apply subtle overscanned breathing, head tilt, sway, and speech nod."""
-    emo_bounce = 1.35 if emotion in ("happy", "laugh") else (0.7 if emotion == "sad" else 1.0)
-    scale = 1.045 + 0.006 * math.sin(2.0 * math.pi * 0.35 * t_sec) + 0.012 * energy * emo_bounce
-    dx = 2.0 * math.sin(2.0 * math.pi * 0.42 * t_sec)
-    dy = 1.2 * math.sin(2.0 * math.pi * 0.84 * t_sec) - 2.6 * energy * emo_bounce
-    angle_rad = math.radians(1.4 * math.sin(2.0 * math.pi * 0.29 * t_sec) * emo_bounce)
+    """Apply subtle breathing/speech nod without side-to-side swaying or tilt."""
+    emo_bounce = 1.2 if emotion in ("happy", "laugh") else (0.7 if emotion == "sad" else 1.0)
+    scale = 1.015 + 0.004 * math.sin(2.0 * math.pi * 0.35 * t_sec) + 0.008 * energy * emo_bounce
+    dy = -1.6 * energy * emo_bounce
 
     cx = size * 0.5
     cy = size * 0.5
     inv_scale = 1.0 / scale
-    cos_a = math.cos(angle_rad) * inv_scale
-    sin_a = math.sin(angle_rad) * inv_scale
-    tx = cx + dx
-    ty = cy + dy
-    a = cos_a
-    b = sin_a
-    c = cx - a * tx - b * ty
-    d = -sin_a
-    e = cos_a
-    f = cy - d * tx - e * ty
+    a = inv_scale
+    b = 0.0
+    c = cx - inv_scale * cx
+    d = 0.0
+    e = inv_scale
+    f = cy - inv_scale * (cy + dy)
 
     pil_img = Image.fromarray(frame, mode="RGB")
     moved = pil_img.transform(
