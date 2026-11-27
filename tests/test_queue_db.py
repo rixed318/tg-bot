@@ -165,3 +165,31 @@ def test_sqlite_connect_closes_file_descriptors(tmp_path: Path) -> None:
         remember_participant(1, "user", "User", path=db_path)
     after = len(os.listdir("/proc/self/fd"))
     assert after - before < 5
+
+
+def test_claim_does_not_bundle_distinct_text_requests(tmp_path: Path) -> None:
+    db_path = tmp_path / "queue.db"
+    enqueue(
+        chat_id=-100, thread_id=None, message_id=10, reply_to_message_id=None,
+        sender_id=1, sender_name="Рус", text="Секси ксюшу сгенерируй, фото + видео",
+        reply_context=None, path=db_path,
+    )
+    enqueue(
+        chat_id=-100, thread_id=None, message_id=11, reply_to_message_id=None,
+        sender_id=1, sender_name="Рус", text="[К сообщению прикреплено: фотография]",
+        reply_context=None, photo_file_id="p11", path=db_path,
+    )
+    enqueue(
+        chat_id=-100, thread_id=None, message_id=12, reply_to_message_id=None,
+        sender_id=1, sender_name="Рус", text="Создай эмоджи пак из этих изображений",
+        reply_context=None, path=db_path,
+    )
+    with connect(db_path) as db:
+        first = claim(db)
+        assert first is not None
+        assert first["message_id"] == 10
+        assert len(first["claimed_ids"]) == 1
+        second = claim(db)
+        assert second is not None
+        assert second["message_id"] == 12
+        assert len(second["claimed_ids"]) == 2

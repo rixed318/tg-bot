@@ -220,9 +220,21 @@ def evaluate_trigger(
     available_ids = [int(item["message_id"]) for item in unanswered if item.get("message_id")]
 
     if is_explicit_call(task):
-        # If there are 2-3 recent unanswered messages right before/with the explicit call,
-        # keep recent context cohesive by targeting up to last 3 unanswered messages.
-        targets = tuple(available_ids[-3:]) if available_ids else (int(task["message_id"]),)
+        # Keep the explicit message as primary target; only attach immediately preceding
+        # bare-media items (without substantive text), never unrelated prior requests.
+        primary_mid = int(task["message_id"])
+        selected = [primary_mid]
+        for item in reversed(unanswered):
+            mid = int(item.get("message_id") or 0)
+            if not mid or mid >= primary_mid:
+                continue
+            cleaned = re.sub(r"\[К сообщению прикреплено:[^\]]+\]", "", str(item.get("text") or "")).strip()
+            if cleaned:
+                break
+            selected.append(mid)
+            if len(selected) >= 8:
+                break
+        targets = tuple(sorted(selected))
         return TriggerDecision(
             should_reply=True,
             flag="reply",
@@ -253,8 +265,9 @@ def evaluate_trigger(
 1. Пропускай (`"should_reply": false`) примерно 35–45% совсем уж пустых или чисто личных реплик: одиночные междометия («да», «ок», «лол», «хз»), короткие перебросы двоих участников строго друг с другом, когда нечего добавить.
 2. Ставь `"should_reply": true`, если:
    - есть вопрос, тема (особенно Blender, 3D, ИИ, техника, жизнь группы), подкол или реакция на твоё прошлое ГС/кружочек (даже без формального reply);
-   - или накопилось 2+ неотвеченных сообщений подряд — отличный повод ответить одним живым общим ГС/кружочком и прокомментировать их сразу в `target_message_ids`;
+   - или накопилось 2+ неотвеченных сообщений подряд на ОДНУ тему — отличный повод ответить одним живым общим ГС/кружочком;
    - или кто-то просит действие (стикер, картинку, монтаж, гифку, удаление).
+3. РАЗДЕЛЯЙ РАЗНОРОДНЫЕ ЗАДАНИЯ: если среди неотвеченных сообщений есть два разных по смыслу запроса/действия (например, одно просит сгенерировать фото/видео Ксюши, а другое — сделать эмодзи-пак, стикерпак, монтаж или кавер), НИКОГДА не объединяй их в одном ГС! Выбери в `target_message_ids` ТОЛЬКО одно конкретное задание (плюс относящиеся к нему голые фото/вложения).
 
 Время с твоего последнего ГС в группе: {elapsed_note}.
 Всего в истории переписки (в `full-context.jsonl`): {len(task.get("context") or [])} сообщений.
@@ -345,7 +358,7 @@ def build_reply_prompt(
 - Стикер/GIF: `/home/rus/dev/rixed-music/.venv/bin/python /home/rus/dev/rixed-music/scripts/telegram_bot_sticker_gif.py <input> <output> [--mode sticker|video_sticker|gif]`
 - Вырезка фона: `/home/rus/dev/rixed-music/.venv/bin/python /home/rus/dev/rixed-music/scripts/telegram_bot_cutout.py <input> <output>`
 - Удаление своих сообщений: директива `[[delete-all-bot-messages]]` или `[[delete-previous-message]]` (на отдельной строке, в озвучку не попадёт).
-- Стикеры, эмодзи и стикерпаки: `[[make-sticker]]` (или `[[make-sticker:00:05-00:08]]` для видео), `[[make-emoji]]` (или `[[make-emoji:00:05-00:08]]`). Если пользователь просит создать **целый стикерпак или эмодзипак** с названием — используй `[[sticker-pack:Название пака]]` или `[[emoji-pack:Название пака]]` (бот сам соберёт все присланные фото/видео, подпишет пак и пришлёт ссылку `t.me/addstickers/...`)! Важно: видео-стикеры/эмодзи в Telegram не могут быть длиннее 3 секунд — если прислали длинное видео (>4 сек) и не указали таймкоды, сначала спроси 3-секундный диапазон (например `00:05-00:08`).
+- Стикеры, эмодзи и стикерпаки: `[[make-sticker]]` (или `[[make-sticker:00:05-00:08]]` для видео), `[[make-emoji]]` (или `[[make-emoji:00:05-00:08]]`). Если пользователь просит создать **целый стикерпак или эмодзипак** с названием — ПРОСТО верни директиву `[[sticker-pack:Название пака]]` или `[[emoji-pack:Название пака]]` на отдельной строке! НЕ запускай вручную `telegram_bot_sticker_gif.py` или `cutout` для паков (если отдельно не просили вырезать фон `[[cutout]]`) — встроенный быстрый пайплайн сам за 1–2 секунды сконвертирует все присланные фото/видео и пришлёт ссылку `t.me/addstickers/...`! Важно: видео-стикеры/эмодзи в Telegram не могут быть длиннее 3 секунд — если прислали длинное видео (>4 сек) и не указали таймкоды, сначала спроси 3-секундный диапазон (например `00:05-00:08`).
 - Спеть / перепеть / зачитать трек под минус (кавер голосом активного персонажа поверх музыки): директива `[[singing-cover]]` или `[[singing-cover:<message_id>]]` (на отдельной строке, в озвучку не попадёт). Используй её ВСЕГДА, когда пользователь просит спеть, перепеть, зачитать трек, сделать кавер или наложить голос на минус/аудио из чата (укажи `<message_id>` того сообщения с треком, на которое ответил пользователь или которое он имеет в виду).
 - Rich-форматированный текстовый ответ (вместо ГС/кружочка): ты САМ решаешь, когда лучше ответить текстом, даже если включены кружочки! Если пользователь просит расписать подробно, сделать гайд, статью, код, таблицу (`<pre>`), сворачиваемые блоки (`<blockquote expandable>`), цитаты или просит именно текст — обязательно добавь `[[rich-text]]` на отдельной строке и пиши красивый структурированный Telegram HTML (`<b>`, `<i>`, `<u>`, `<s>`, `<code>`, `<pre>`, `<blockquote>`, `<blockquote expandable>`, `<tg-spoiler>`, `<a href="...">`).
 - Камера в кружочке (опционально на отдельной строке, в озвучку не попадёт): `[[camera:pan_up]]`, `[[camera:pan_down]]`, `[[camera:pan_left]]`, `[[camera:pan_right]]`, `[[camera:zoom_in]]`, `[[camera:zoom_out]]`, `[[camera:tilt_left]]`, `[[camera:tilt_right]]`, `[[camera:nod]]`, `[[camera:shake]]` или `[[camera:auto]]` — двигай камеру и наклоняй голову, когда это уместно по настроению!

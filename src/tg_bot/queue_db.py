@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
+import re
 import sqlite3
 from typing import Any
 
@@ -467,8 +468,14 @@ def _unanswered_rows(
     return result
 
 
+def _has_substantive_text(text: str | None) -> bool:
+    """Return True when a queued message contains real text beyond media placeholders."""
+    cleaned = re.sub(r"\[К сообщению прикреплено:[^\]]+\]", "", str(text or "")).strip()
+    return bool(cleaned)
+
+
 def claim(database: sqlite3.Connection, *, max_batch: int = 10) -> dict[str, Any] | None:
-    """Claim oldest queued task along with any queued burst siblings in the same chat."""
+    """Claim oldest queued task along with compatible burst siblings (e.g. bare media album) in the same chat."""
     stale = (datetime.now(UTC) - timedelta(minutes=30)).isoformat()
     database.execute("begin immediate")
     database.execute(
@@ -495,7 +502,20 @@ def claim(database: sqlite3.Connection, *, max_batch: int = 10) -> dict[str, Any
         (chat_id, row["id"], max(0, max_batch - 1)),
     ).fetchall()
 
-    claimed_rows = [row, *other_rows]
+    # Do not merge two separate substantive text requests into a single LLM task;
+    # only bundle bare-media bursts (no text / attachment placeholder) with one caption/request.
+    claimed_rows = [row]
+    has_text_request = _has_substantive_text(row["text"])
+    pure_text_first = has_text_request and not row["photo_file_id"]
+    for candidate in other_rows:
+        cand_has_text = _has_substantive_text(candidate["text"])
+        if has_text_request and cand_has_text:
+            break
+        if pure_text_first and candidate["photo_file_id"]:
+            break
+        claimed_rows.append(candidate)
+        if cand_has_text:
+            has_text_request = True
     # Primary task becomes the latest message in the burst so replies anchor cleanly.
     primary = claimed_rows[-1]
     bundled_rows = claimed_rows[:-1]

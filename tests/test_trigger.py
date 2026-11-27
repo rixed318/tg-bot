@@ -110,3 +110,20 @@ def test_strip_meta_thoughts() -> None:
         "Воспитала улица его."
     )
     assert strip_meta_thoughts(raw4) == "Воспитала улица его."
+
+
+def test_explicit_call_does_not_merge_unrelated_prior_request(tmp_path: Path) -> None:
+    from tg_bot.trigger import evaluate_trigger
+
+    unanswered = [
+        {"message_id": 8749, "sender_name": "Рус", "text": "Секси ксюшу сгенерируй, фото + видео"},
+        {"message_id": 8753, "sender_name": "Рус", "text": "[К сообщению прикреплено: фотография]"},
+        {"message_id": 8754, "sender_name": "Рус", "text": "Создай эмоджи пак из этих изображений"},
+    ]
+    decision = evaluate_trigger(
+        {"chat_id": 12345, "message_id": 8754, "text": "Создай эмоджи пак из этих изображений"},
+        tmp_path,
+        unanswered=unanswered,
+    )
+    assert decision.should_reply is True
+    assert decision.target_message_ids == (8753, 8754)
