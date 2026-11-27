@@ -1,33 +1,31 @@
 # Next-Gen Bot Roadmap & Handoff
 
-## 1. Voice Fine-Tuning (2–10 min Ruslan Recording -> `F5-TTS` LoRA / FT)
-Zero-shot cloning (`voices/ruslan.wav`) captures general timbre, while **true fine-tuning** on 2–10 minutes of clean speech makes cadence, breaths, and micro-intonations nearly indistinguishable from the original speaker.
-
+## 1. Voice Fine-Tuning (8–10 min Ruslan Recording -> `F5-TTS` LoRA / FT)
+User confirmed recording **8–10 minutes** of varied Russian speech (calm, emotional, laugh, surprise, fast/intense, pauses).
 ### Pipeline Plan
-1. User sends a 2–10 minute voice recording (or `.ogg`/`.wav`/`.m4a`).
+1. Place recording in `/home/rus/Downloads/` (`.ogg` / `.wav` / `.m4a`).
 2. `scripts/prepare_voice_dataset.py`:
-   - Convert to 24 kHz mono WAV, run `highpass=f=80` + `loudnorm`.
-   - Split on VAD silences into 4–11s chunks (`>20` segments).
-   - Transcribe every chunk with `faster-whisper large-v3-turbo` (`language="ru"`).
-   - Write metadata CSV (`audio_path|transcript`).
-3. Fine-tune `Andreevai/f5-tts-russian-emotional` (LoRA / fp16 with gradient checkpointing on RTX 4060 8 GB).
-4. Register `"checkpoint"` in `voices/profiles.json` so `voice_tts.py` loads the fine-tuned adapter for that character.
+   - Convert to 24 kHz mono WAV, `highpass=f=80`, `loudnorm=I=-16`.
+   - Split on VAD silences into 4–11s segments.
+   - Transcribe with `faster-whisper large-v3-turbo` (`language="ru"`).
+3. Fine-tune `Andreevai/f5-tts-russian-emotional` on RTX 4060 8 GB (fp16, gradient checkpointing).
+4. Register `"checkpoint"` in `voices/profiles.json`.
 
-## 2. Telegram Bot vs Userbot (Premium) & 4KB Mini-Apps
-- **Bot API (`🤖 Бот`, default):**
-  - Required for **4KB Rich HTML messages** (`<b>`, `<i>`, `<u>`, `<s>`, `<code>`, `<pre>`, `<blockquote>`, `<blockquote expandable>`, `<tg-spoiler>`, `<a href="...">`).
-  - Required for **Telegram Mini Apps (`WebAppInfo`)** embedded directly inside bot messages / inline buttons (interactive HTML/JS micro-apps launched right inside chat!).
-  - Required for inline `/commands` keyboards and `sendMessageDraft` streaming.
-- **Telegram Premium Userbot (`⭐ Мой Premium` via `rixed-joke-userbot` / Telethon):**
-  - Sends as the user's own Telegram Premium account (supports **4 GiB file uploads**, native Premium custom emoji `<tg-emoji>`, and appearing as the user's personal account).
-  - *Note:* Telegram Bot API Mini Apps and bot inline panels cannot be sent by a regular user account — keep `🤖 Бот` as default and use `Premium` transport specifically for >50 MB uploads or personal-account replies.
+## 2. Video-to-Sticker & Custom Emoji (with Time Range)
+Telegram limits animated/video stickers and custom emojis to **<= 3.0 seconds**, `.webm` VP9 without audio (`512×512` for stickers, `100×100` for custom emoji, `<= 256 KB`).
+- **Implemented (`media_tools.py`):**
+  - `make_clean_emoji_webp` (`100×100` `.webp` for photo -> emoji).
+  - `make_video_sticker_or_emoji_webm` (`512×512` or `100×100` `.webm` VP9, `<= 3s`, supports `--start` / `--end` time range).
+  - Directives: `[[make-emoji]]`, `[[make-sticker:00:05-00:08]]`, `[[make-emoji:00:05-00:08]]`.
+- **Next:** If user sends a >4s video asking for a sticker/emoji without specifying timestamps, the bot asks which 3-second range (`например 00:05-00:08`) to cut.
 
-## 3. Autonomous Format Switching (`[[rich-text]]`) & Camera Motion (`[[camera:...]]`)
-- **Implemented:** The LLM can autonomously output `[[rich-text]]` even when circular video mode is active whenever the user asks for detailed breakdowns, guides, code, tables (`<pre>`), or expandable blocks (`<blockquote expandable>`).
-- **Implemented:** `[[camera:pan_up|pan_down|pan_left|pan_right|zoom_in|zoom_out|shake|auto]]` drives smooth eased camera pans/zooms inside `avatar_video.py`.
+## 3. In-Chat Games & Leaderboard (`src/tg_bot/games.py`)
+- Persistent leaderboard by `user_id`, `username`, `display_name`, `game`, `score`.
+- **Games:**
+  - **Змейка / 2048** (playable 4KB Telegram WebApp / inline game posting scores back to bot leaderboard).
+  - **Мафия / Бункер (компанейская)** — multi-player group lobby via inline buttons (`Присоединиться`, `Начать игру`, ночные роли в ЛС, дневное голосование в группе).
+  - **Быстрые чат-дуэли** (`/commands -> 🎮 Игры`: бросок кубика / дуэль / таблица рекордов).
 
-## 4. Full Body / Head / Hands / Outfit Animation & Visual Selector
-- **Implemented in `/commands`:** Removed `Пресет` (voice and behavior are always independent) and `Обновить`; added `👗 Визуал` selector (`Обычный (2D арт)` / `Ржачный (фото)` + extensible per-character outfit folders `voices/avatars/<char>/<outfit>/`).
-- **Next stage:**
-  - Multi-layer character rigs (torso + head + hands + outfit PNG layers) or `LivePortrait` / `MuseTalk` GPU rendering on RTX 4060.
-  - Per-character outfit packs (`casual`, `street`, `cyber`, `suit`) selectable with live preview + auto-cleanup in `/commands`.
+## 4. Multi-Outfit & Body/Hands/Torso Character System
+- Per-character visual outfits under `voices/avatars/<char>_<outfit>/` (e.g. `anya_street`, `ruslan_street`, `anya_cyber`, etc.) selectable in `/commands -> 👗 Визуал` with live preview & auto-cleanup.
+- Full body/torso/head/hands layered sprite rig & `LivePortrait` GPU upgrade path.

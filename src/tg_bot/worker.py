@@ -44,6 +44,8 @@ from tg_bot.media_tools import (
     download_public_media,
     find_source_video,
     generate_image,
+    make_clean_sticker_webp,
+    make_video_sticker_or_emoji_webm,
     parse_agent_response,
     run_montage,
     run_sticker_or_gif,
@@ -1017,13 +1019,12 @@ def process_one(token: str) -> bool:
                         stable_key=f"download:{task_id}:{index}:{parsed.download_url}",
                     )
 
-            if (parsed.make_sticker or parsed.cutout_photo) and not any(
-                "sticker" in p.name.lower() or p.suffix.lower() == ".webp" for p in downloaded_files
+            if (parsed.make_sticker or parsed.make_emoji or parsed.cutout_photo) and not any(
+                "sticker" in p.name.lower() or p.suffix.lower() in (".webp", ".webm") for p in downloaded_files
             ):
                 sticker_sources: list[Path] = []
                 if attachment is not None:
                     sticker_sources.append(attachment)
-                # Also collect all non-primary photo attachments across unanswered batch (up to 10!)
                 seen_fids: set[str] = {str(task.get("photo_file_id") or "")}
                 for u_idx, u_item in enumerate(unanswered):
                     fid = str(u_item.get("photo_file_id") or "")
@@ -1046,19 +1047,32 @@ def process_one(token: str) -> bool:
 
                 for s_idx, source_media in enumerate(sticker_sources, start=1):
                     is_vid = source_media.suffix.lower() in VIDEO_SUFFIXES
+                    prefix = "emoji" if parsed.make_emoji else "sticker"
                     out_sticker = work_dir / "outbox" / (
-                        f"sticker_{task_id}_{s_idx}.webm" if is_vid else f"sticker_{task_id}_{s_idx}.webp"
+                        f"{prefix}_{task_id}_{s_idx}.webm" if is_vid else f"{prefix}_{task_id}_{s_idx}.webp"
                     )
-                    mode = "video_sticker" if is_vid else "sticker"
                     try:
-                        run_sticker_or_gif(source_media, out_sticker, mode)
+                        if is_vid:
+                            make_video_sticker_or_emoji_webm(
+                                source_media,
+                                out_sticker,
+                                is_emoji=parsed.make_emoji,
+                                time_range=parsed.sticker_range,
+                            )
+                        else:
+                            make_clean_sticker_webp(
+                                source_media,
+                                out_sticker,
+                                max_dim=100 if parsed.make_emoji else 512,
+                                margin=6 if parsed.make_emoji else 20,
+                            )
                         if out_sticker.is_file():
                             downloaded_files = (*downloaded_files, out_sticker)
                             archive_on_drive(
-                                out_sticker, task, category="stickers", stable_key=f"sticker:{task_id}:{s_idx}"
+                                out_sticker, task, category="stickers", stable_key=f"{prefix}:{task_id}:{s_idx}"
                             )
                     except Exception:
-                        LOGGER.exception("Sticker creation failed for task %s item %s", task_id, s_idx)
+                        LOGGER.exception("Sticker/emoji creation failed for task %s item %s", task_id, s_idx)
 
             if parsed.make_gif and not any(
                 "anim" in p.name.lower() or p.suffix.lower() == ".gif" for p in downloaded_files

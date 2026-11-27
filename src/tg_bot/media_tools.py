@@ -46,7 +46,12 @@ CUTOUT_DIRECTIVE = re.compile(r"^\[\[cutout-photo\]\]$")
 MONTAGE_DIRECTIVE = re.compile(r"^\[\[montage-video(?::(?P<params>.*))?\]\]$")
 DELETE_PREVIOUS_DIRECTIVE = re.compile(r"^\[\[delete-previous-message\]\]$")
 DELETE_ALL_DIRECTIVE = re.compile(r"^\[\[delete-(?:all-)?bot-messages(?::(?P<count>\d+|all))?\]\]$")
-STICKER_DIRECTIVE = re.compile(r"^\[\[(?:make-)?sticker\]\]$")
+STICKER_DIRECTIVE = re.compile(
+    r"^\[\[(?:make-)?sticker(?::(?P<range>\d{1,2}:\d{2}-\d{1,2}:\d{2}|\d+(?:\.\d+)?-\d+(?:\.\d+)?))?\]\]$"
+)
+EMOJI_DIRECTIVE = re.compile(
+    r"^\[\[(?:make-)?emoji(?::(?P<range>\d{1,2}:\d{2}-\d{1,2}:\d{2}|\d+(?:\.\d+)?-\d+(?:\.\d+)?))?\]\]$"
+)
 GIF_DIRECTIVE = re.compile(r"^\[\[(?:make-)?gif\]\]$")
 EMOTION_DIRECTIVE = re.compile(r"^\[\[emotion:(?P<emotion>[a-zA-Z_-]+)\]\]$")
 SINGING_COVER_DIRECTIVE = re.compile(r"^\[\[singing-cover(?::(?P<mid>\d+))?\]\]$")
@@ -103,6 +108,8 @@ class AgentResponse:
     delete_previous: bool = False
     delete_all_bot_messages: bool = False
     make_sticker: bool = False
+    make_emoji: bool = False
+    sticker_range: str | None = None
     make_gif: bool = False
     emotion: str = "neutral"
     singing_cover: bool = False
@@ -128,6 +135,8 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
     delete_previous = False
     delete_all_bot_messages = False
     make_sticker = False
+    make_emoji = False
+    sticker_range: str | None = None
     make_gif = False
     emotion = "neutral"
     singing_cover = False
@@ -161,9 +170,19 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
         if DELETE_PREVIOUS_DIRECTIVE.fullmatch(stripped):
             delete_previous = True
             continue
-        if STICKER_DIRECTIVE.fullmatch(stripped):
+        st_match = STICKER_DIRECTIVE.fullmatch(stripped)
+        if st_match:
             make_sticker = True
             cutout_photo = True
+            if st_match.group("range"):
+                sticker_range = st_match.group("range")
+            continue
+        em_match = EMOJI_DIRECTIVE.fullmatch(stripped)
+        if em_match:
+            make_emoji = True
+            cutout_photo = True
+            if em_match.group("range"):
+                sticker_range = em_match.group("range")
             continue
         if GIF_DIRECTIVE.fullmatch(stripped):
             make_gif = True
@@ -255,6 +274,8 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
         delete_previous=delete_previous,
         delete_all_bot_messages=delete_all_bot_messages,
         make_sticker=make_sticker,
+        make_emoji=make_emoji,
+        sticker_range=sticker_range,
         make_gif=make_gif,
         emotion=emotion,
         singing_cover=singing_cover,
@@ -434,8 +455,10 @@ def run_sticker_or_gif(source_media: Path, output_path: Path, mode: str) -> Path
     return output_path
 
 
-def make_clean_sticker_webp(source_media: Path, output_path: Path) -> Path:
-    """Convert any image into a cleanly centered 512x512 transparent Telegram WebP sticker."""
+def make_clean_sticker_webp(
+    source_media: Path, output_path: Path, *, max_dim: int = 512, margin: int = 20
+) -> Path:
+    """Convert any image into a cleanly centered transparent Telegram WebP (512px sticker or 100px emoji)."""
     from PIL import Image, ImageFilter, ImageOps
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -466,16 +489,15 @@ def make_clean_sticker_webp(source_media: Path, output_path: Path) -> Path:
         bbox = alpha.getbbox()
         if bbox:
             im = im.crop(bbox)
-        # Fit into 472x472 inside 512x512 canvas (20px safe margin on each side)
-        max_side = 472
-        im.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
-        canvas = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
-        ox = (512 - im.width) // 2
-        oy = (512 - im.height) // 2
-        # Add subtle crisp white sticker outline when transparency exists
+        inner = max(32, max_dim - margin * 2)
+        im.thumbnail((inner, inner), Image.Resampling.LANCZOS)
+        canvas = Image.new("RGBA", (max_dim, max_dim), (0, 0, 0, 0))
+        ox = (max_dim - im.width) // 2
+        oy = (max_dim - im.height) // 2
         a_ch = im.getchannel("A")
         if a_ch.getextrema()[0] < 250:
-            dilated = a_ch.filter(ImageFilter.MaxFilter(9))
+            k = 9 if max_dim >= 256 else 3
+            dilated = a_ch.filter(ImageFilter.MaxFilter(k))
             outline = Image.new("RGBA", im.size, (255, 255, 255, 235))
             outline.putalpha(dilated)
             canvas.paste(outline, (ox, oy), outline)
@@ -483,6 +505,44 @@ def make_clean_sticker_webp(source_media: Path, output_path: Path) -> Path:
         canvas.save(output_path, format="WEBP", quality=92, method=6)
     if cutout_tmp.is_file():
         cutout_tmp.unlink(missing_ok=True)
+    return output_path
+
+
+def make_video_sticker_or_emoji_webm(
+    source_video: Path,
+    output_path: Path,
+    *,
+    is_emoji: bool = False,
+    time_range: str | None = None,
+) -> Path:
+    """Cut <=3s VP9 WebM (512x512 for sticker or 100x100 for custom emoji) from a video."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    dim = 100 if is_emoji else 512
+    cmd = ["ffmpeg", "-y"]
+    if time_range and "-" in time_range:
+        start, end = [p.strip() for p in time_range.split("-", 1)]
+        cmd.extend(["-ss", start, "-to", end])
+    else:
+        cmd.extend(["-t", "3"])
+    cmd.extend(
+        [
+            "-i",
+            str(source_video),
+            "-t",
+            "3",
+            "-an",
+            "-vf",
+            f"fps=30,scale={dim}:{dim}:force_original_aspect_ratio=decrease,pad={dim}:{dim}:(ow-iw)/2:(oh-ih)/2:color=0x00000000",
+            "-c:v",
+            "libvpx-vp9",
+            "-pix_fmt",
+            "yuva420p",
+            "-b:v",
+            "260k" if not is_emoji else "120k",
+            str(output_path),
+        ]
+    )
+    subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=120)
     return output_path
 
 

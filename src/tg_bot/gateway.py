@@ -138,7 +138,10 @@ def _build_main_panel() -> tuple[str, InlineKeyboardMarkup]:
                 InlineKeyboardButton(text="👗 Визуал", callback_data="cmd:menu:visual"),
                 InlineKeyboardButton(text="🤖 Модель ИИ", callback_data="cmd:menu:ai"),
             ],
-            [InlineKeyboardButton(text="✖️ Закрыть", callback_data="cmd:close")],
+            [
+                InlineKeyboardButton(text="🎮 Игры и рекорды", callback_data="cmd:menu:games"),
+                InlineKeyboardButton(text="✖️ Закрыть", callback_data="cmd:close"),
+            ],
         ]
     )
     return text, kb
@@ -314,6 +317,36 @@ async def main() -> None:
             mid = parts[2]
             set_bot_setting("ai_model", mid)
             await callback.answer(f"ИИ: {_label_for(AI_MODELS, mid, mid)}")
+        elif action == "game" and len(parts) > 2:
+            subgame = parts[2]
+            try:
+                from tg_bot.games import format_leaderboard_html, play_dice_duel_round
+            except ImportError:
+                from joke_bot_games import format_leaderboard_html, play_dice_duel_round
+            if subgame == "duel":
+                u = callback.from_user
+                gtext = play_dice_duel_round(
+                    user_id=u.id,
+                    username=u.username or "",
+                    display_name=u.full_name or str(u.id),
+                )
+            else:
+                gtext = format_leaderboard_html("dice_duel")
+            gkb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(text="🎲 Ещё раз", callback_data="cmd:game:duel"),
+                        InlineKeyboardButton(text="🏆 Рекорды", callback_data="cmd:game:top"),
+                    ],
+                    [InlineKeyboardButton(text="⬅️ Назад", callback_data="cmd:home")],
+                ]
+            )
+            await callback.answer()
+            try:
+                await callback.message.edit_text(gtext, parse_mode="HTML", reply_markup=gkb)
+            except Exception:
+                pass
+            return
 
         settings = get_bot_settings()
         if action == "menu" and len(parts) > 2:
@@ -342,6 +375,21 @@ async def main() -> None:
                     CHARACTER_CATALOG,
                     settings.get("persona", "default"),
                     "cmd:setpersona",
+                )
+            elif sub == "games":
+                text = (
+                    "🎮 <b>Игры в чате</b>\n\n"
+                    "• <b>Дуэль на костях</b> — быстрая игра в чате с таблицей рекордов по Telegram ID и @username.\n"
+                    "• <b>Змейка / Мафия</b> — в активной разработке (см. roadmap)."
+                )
+                kb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(text="🎲 Бросить кости", callback_data="cmd:game:duel"),
+                            InlineKeyboardButton(text="🏆 Рекорды", callback_data="cmd:game:top"),
+                        ],
+                        [InlineKeyboardButton(text="⬅️ Назад", callback_data="cmd:home")],
+                    ]
                 )
             elif sub == "ai":
                 text, kb = _build_grid_panel(
