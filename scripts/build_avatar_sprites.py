@@ -171,7 +171,7 @@ def _render_variant(
         (LEFT_EYE, LEFT_EYE_UPPER, LEFT_EYE_LOWER, blink_l),
         (RIGHT_EYE, RIGHT_EYE_UPPER, RIGHT_EYE_LOWER, blink_r),
     ):
-        if amt > 0.08:
+        if amt > 0.45:
             poly = np.round(pts[eye_idx]).astype(np.int32)
             ex, ey, ew, eh = cv2.boundingRect(poly)
             sample_y = max(0, ey - max(3, int(round(4 * s))))
@@ -185,14 +185,14 @@ def _render_variant(
             cv2.ellipse(
                 eye_mask,
                 (int(round(ex + ew * 0.5)), int(round(ey + eh * 0.5))),
-                (max(4, int(round(ew * 0.58))), max(3, int(round(eh * 0.72)))),
+                (max(4, int(round(ew * 0.54))), max(3, int(round(eh * 0.65)))),
                 0,
                 0,
                 360,
                 1.0,
                 -1,
             )
-            eye_mask = cv2.GaussianBlur(eye_mask, (5, 5), 1.4)
+            eye_mask = cv2.GaussianBlur(eye_mask, (3, 3), 0.9)
             alpha_e = (eye_mask * min(1.0, amt))[..., None]
             warped = np.clip(warped.astype(np.float32) * (1.0 - alpha_e) + lid_color * alpha_e, 0, 255).astype(np.uint8)
 
@@ -242,10 +242,10 @@ def build_pack(photo_path: Path, out_dir: Path, model_path: Path) -> None:
     emotion_specs = {
         "neutral": dict(smile=0.0, brow_lift=0.0, brow_furrow=0.0, blink_l=0.0, blink_r=0.0, shock_eyes=0.0),
         "happy": dict(smile=0.75, brow_lift=0.25, brow_furrow=0.0, blink_l=0.0, blink_r=0.0, shock_eyes=0.0),
-        "laugh": dict(smile=1.05, brow_lift=0.35, brow_furrow=0.0, blink_l=0.35, blink_r=0.35, shock_eyes=0.0),
+        "laugh": dict(smile=1.0, brow_lift=0.35, brow_furrow=0.0, blink_l=0.0, blink_r=0.0, shock_eyes=0.0),
         "angry": dict(smile=-0.55, brow_lift=0.0, brow_furrow=1.0, blink_l=0.0, blink_r=0.0, shock_eyes=0.0),
         "shock": dict(smile=-0.1, brow_lift=1.0, brow_furrow=0.0, blink_l=0.0, blink_r=0.0, shock_eyes=1.0),
-        "sad": dict(smile=-0.7, brow_lift=0.45, brow_furrow=0.15, blink_l=0.15, blink_r=0.15, shock_eyes=0.0),
+        "sad": dict(smile=-0.7, brow_lift=0.45, brow_furrow=0.15, blink_l=0.0, blink_r=0.0, shock_eyes=0.0),
     }
 
     for emo, base_kw in emotion_specs.items():
