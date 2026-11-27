@@ -6,10 +6,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import mimetypes
 import os
 from pathlib import Path
+import time
 from urllib.parse import quote
 
+import aiohttp
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.enums import ChatMemberStatus, ChatType, MessageEntityType
@@ -379,6 +382,11 @@ async def main() -> None:
             mid = parts[2]
             set_bot_setting("ai_model", mid)
             await callback.answer(f"ИИ: {_label_for(AI_MODELS, mid, mid)}")
+        elif action == "game" and len(parts) > 2 and parts[2] == "refresh":
+            await _fetch_tg_games_catalog(force=True)
+            await callback.answer("Каталог tg-games обновлён!")
+            action = "menu"
+            parts = ["cmd", "menu", "games"]
         elif action == "game" and len(parts) > 2:
             subgame = parts[2]
             arg = parts[3] if len(parts) > 3 else ""
@@ -391,7 +399,27 @@ async def main() -> None:
             uname = u.username or ""
             dname = u.full_name or str(u.id)
 
-            if subgame == "duel":
+            if subgame == "widget" and arg:
+                raw_url = f"https://raw.githubusercontent.com/{TG_GAMES_REPO}/main/{arg}/widget.html"
+                async with aiohttp.ClientSession() as sess:
+                    async with sess.get(raw_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        if resp.status != 200:
+                            await callback.answer("Файл widget.html не найден", show_alert=True)
+                            return
+                        html_body = await resp.text()
+                    api_url = f"https://api.telegram.org/bot{bot.token}/sendWidget"
+                    async with sess.post(
+                        api_url,
+                        json={"chat_id": cid, "html": html_body},
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as wresp:
+                        wdata = await wresp.json()
+                if wdata.get("ok"):
+                    await callback.answer("⚡ Виджет отправлен!")
+                else:
+                    await callback.answer(f"Telegram: {wdata.get('description', 'ошибка')[:120]}", show_alert=True)
+                return
+            elif subgame == "duel":
                 gtext = gmod.play_dice_duel_round(user_id=u.id, username=uname, display_name=dname)
                 gkb = InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -596,13 +624,42 @@ async def main() -> None:
                     if is_priv_chat
                     else InlineKeyboardButton(text="🎮 Открыть Аркаду (Все игры)", url=group_snake_url)
                 )
+                extra_rows: list[list[InlineKeyboardButton]] = []
+                if is_priv_chat:
+                    catalog = await _fetch_tg_games_catalog()
+                    for item in catalog:
+                        slug = item["slug"]
+                        g_url = (
+                            f"https://rixed.store/arcade/ext/{slug}/index.html?uid={u.id}"
+                            f"&uname={quote(u.username or '')}&dname={quote(u.full_name or '')}"
+                        )
+                        row_btns = [
+                            InlineKeyboardButton(
+                                text=f"{item['icon']} {item['title']}",
+                                web_app=WebAppInfo(url=g_url),
+                            )
+                        ]
+                        if item.get("has_widget"):
+                            row_btns.append(
+                                InlineKeyboardButton(text="⚡ Виджет", callback_data=f"cmd:game:widget:{slug}")
+                            )
+                        extra_rows.append(row_btns)
+                    extra_rows.append(
+                        [InlineKeyboardButton(text="🔄 Обновить из GitHub (tg-games)", callback_data="cmd:game:refresh")]
+                    )
+                else:
+                    extra_rows.append(
+                        [InlineKeyboardButton(text="🕹 Все игры из tg-games (в ЛС)", url=f"https://t.me/{me.username}?start=games")]
+                    )
                 text = (
-                    "🎮 <b>Игры в чате (Всё в одном Mini App)</b>\n\n"
-                    "• <b>🐍 Змейка 60 FPS</b>, <b>🔢 2048</b>, <b>💣 Сапёр 6×6</b>, <b>🎲 Кости</b>, <b>🕵️ Мафия</b> и <b>🏆 Живой Топ</b> — всё работает плавно без лимитов кнопок!"
+                    "🎮 <b>Игры и мини-приложения</b>\n\n"
+                    "• <b>🎮 Аркада (5 игр + Топ)</b> — Змейка 60 FPS, 2048, Сапёр, Кости и Мафия.\n"
+                    "• <b>🕹 GitHub <code>rixed318/tg-games</code></b> — новые папки с играми подтягиваются автоматически в ЛС!"
                 )
                 kb = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [html5_btn],
+                        *extra_rows,
                         [
                             InlineKeyboardButton(text="🏆 Рекорды чата", callback_data="cmd:game:top:snake"),
                             InlineKeyboardButton(text="⬅️ Назад", callback_data="cmd:home"),
@@ -662,19 +719,27 @@ async def main() -> None:
             can_dm=True,
         )
         arg = (message.text or "").split(maxsplit=1)[1] if len((message.text or "").split(maxsplit=1)) > 1 else ""
-        if arg.strip().lower() == "snake":
+        if arg.strip().lower() in ("snake", "games"):
             u = message.from_user
             arcade_url = (
                 f"https://rixed.store/arcade/?uid={u.id}"
                 f"&uname={quote(u.username or '')}&dname={quote(u.full_name or '')}"
             )
-            kb = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text="🚀 Запустить Змейку 60 FPS", web_app=WebAppInfo(url=arcade_url))],
-                    [InlineKeyboardButton(text="🏆 Топ Змейки", callback_data="cmd:game:top:snake")],
-                ]
-            )
-            await message.answer("🐍 <b>HTML5 Змейка готова к запуску!</b>", parse_mode="HTML", reply_markup=kb)
+            catalog = await _fetch_tg_games_catalog()
+            rows = [[InlineKeyboardButton(text="🎮 Открыть Аркаду (Все игры)", web_app=WebAppInfo(url=arcade_url))]]
+            for item in catalog:
+                slug = item["slug"]
+                g_url = (
+                    f"https://rixed.store/arcade/ext/{slug}/index.html?uid={u.id}"
+                    f"&uname={quote(u.username or '')}&dname={quote(u.full_name or '')}"
+                )
+                r = [InlineKeyboardButton(text=f"{item['icon']} {item['title']}", web_app=WebAppInfo(url=g_url))]
+                if item.get("has_widget"):
+                    r.append(InlineKeyboardButton(text="⚡ Виджет", callback_data=f"cmd:game:widget:{slug}"))
+                rows.append(r)
+            rows.append([InlineKeyboardButton(text="🔄 Обновить из tg-games", callback_data="cmd:game:refresh")])
+            rows.append([InlineKeyboardButton(text="🏆 Топ рекордов", callback_data="cmd:game:top:snake")])
+            await message.answer("🎮 <b>Игры и приложения из tg-games:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
             return
         await message.answer(
             "Личка подключена. Настройки доступны по команде /commands."
@@ -899,6 +964,50 @@ async def main() -> None:
         await bot.session.close()
 
 
+TG_GAMES_REPO = os.environ.get("TG_GAMES_REPO", "rixed318/tg-games").strip()
+_TG_GAMES_CACHE: tuple[float, list[dict[str, Any]]] = (0.0, [])
+
+
+async def _fetch_tg_games_catalog(*, force: bool = False) -> list[dict[str, Any]]:
+    """Discover game folders in github.com/rixed318/tg-games (cached 60s)."""
+    global _TG_GAMES_CACHE
+    now = time.monotonic()
+    if not force and _TG_GAMES_CACHE[1] and (now - _TG_GAMES_CACHE[0]) < 60.0:
+        return _TG_GAMES_CACHE[1]
+    url = f"https://api.github.com/repos/{TG_GAMES_REPO}/contents/"
+    items: list[dict[str, Any]] = []
+    try:
+        async with aiohttp.ClientSession() as sess:
+            async with sess.get(url, headers={"Accept": "application/vnd.github+json"}, timeout=aiohttp.ClientTimeout(total=6)) as resp:
+                if resp.status != 200:
+                    return _TG_GAMES_CACHE[1] if not force else []
+                entries = await resp.json()
+            if not isinstance(entries, list):
+                return []
+            for entry in entries:
+                if entry.get("type") != "dir":
+                    continue
+                slug = str(entry.get("name") or "")
+                if not slug or slug.startswith("."):
+                    continue
+                title, icon, has_widget = slug, "🕹", False
+                meta_url = f"https://raw.githubusercontent.com/{TG_GAMES_REPO}/main/{slug}/meta.json"
+                try:
+                    async with sess.get(meta_url, timeout=aiohttp.ClientTimeout(total=3)) as mresp:
+                        if mresp.status == 200:
+                            mdata = json.loads(await mresp.text())
+                            title = str(mdata.get("title") or slug)[:40]
+                            icon = str(mdata.get("icon") or "🕹")[:4]
+                            has_widget = bool(mdata.get("widget"))
+                except Exception:
+                    pass
+                items.append({"slug": slug, "title": title, "icon": icon, "has_widget": has_widget})
+    except Exception:
+        return _TG_GAMES_CACHE[1] if not force else []
+    _TG_GAMES_CACHE = (now, items)
+    return items
+
+
 async def _start_arcade_server() -> web.AppRunner:
     """Serve the <4KB HTML5 arcade mini-app and accept score submissions on 127.0.0.1:8120."""
     async def handle_index(_request: web.Request) -> web.Response:
@@ -937,9 +1046,24 @@ async def _start_arcade_server() -> web.AppRunner:
             import joke_bot_games as gmod
         return web.json_response({"ok": True, "rows": gmod.get_leaderboard(game, limit=10)})
 
+    async def handle_ext_game(request: web.Request) -> web.Response:
+        slug = request.match_info.get("slug", "").strip("/")
+        tail = request.match_info.get("tail", "").lstrip("/") or "index.html"
+        if not slug or ".." in slug or ".." in tail:
+            return web.Response(status=400, text="Bad path")
+        raw_url = f"https://raw.githubusercontent.com/{TG_GAMES_REPO}/main/{slug}/{tail}"
+        async with aiohttp.ClientSession() as sess:
+            async with sess.get(raw_url, timeout=aiohttp.ClientTimeout(total=8)) as resp:
+                if resp.status != 200:
+                    return web.Response(status=404, text="Not found in tg-games")
+                body = await resp.read()
+        ctype, _ = mimetypes.guess_type(tail)
+        return web.Response(body=body, content_type=ctype or "application/octet-stream")
+
     app = web.Application()
     app.router.add_get("/", handle_index)
     app.router.add_get("/index.html", handle_index)
+    app.router.add_get("/ext/{slug}/{tail:.*}", handle_ext_game)
     app.router.add_post("/api/score", handle_score)
     app.router.add_get("/api/top", handle_top)
     runner = web.AppRunner(app)
