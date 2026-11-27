@@ -80,7 +80,7 @@
       "audio": "serezha.wav",
       "transcript_file": "serezha.txt",
       "avatar_dir": "avatars/serezha",
-      "speed": 1.02
+      "speed": 1.0
     },
     "alena": {
       "label": "Алёна (бывшая)",
@@ -104,7 +104,7 @@
       "audio": "ruslan.wav",
       "transcript_file": "ruslan.txt",
       "avatar_dir": "avatars/ruslan",
-      "speed": 1.03
+      "speed": 1.0
     },
     "choknutiy": {
       "label": "Чокнутый",
