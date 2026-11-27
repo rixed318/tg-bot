@@ -3,204 +3,131 @@
   "edge_voice": "ru-RU-DmitryNeural",
   "profiles": {
     "default": {
-      "label": "Дима (студийный мужской)",
+      "label": "Тау бао",
       "audio": "default.wav",
       "transcript_file": "default.txt"
     },
-    "masha": {
-      "label": "Маша (студийный женский)",
-      "audio": "masha.wav",
-      "transcript_file": "masha.txt"
-    },
     "anya": {
       "label": "Аня",
-      "aliases": [
-        "аня",
-        "анечка",
-        "anya"
-      ],
-      "audio": "masha.wav",
-      "transcript_file": "masha.txt",
+      "aliases": ["аня", "анечка", "anya"],
+      "audio": "anya.wav",
+      "transcript_file": "anya.txt",
       "avatar_dir": "avatars/anya",
       "speed": 1.03
     },
-    "ded": {
-      "label": "Дед Геннадий",
-      "aliases": [
-        "дед",
-        "геннадий",
-        "дед геннадий",
-        "старик"
-      ],
-      "audio": "ded.wav",
-      "transcript_file": "ded.txt",
-      "speed": 0.91,
-      "ffmpeg_fx": "asetrate=24000*0.93303,aresample=24000,atempo=1.07177,highpass=f=120,lowpass=f=3800"
-    },
-    "gopnik": {
-      "label": "Гопник",
-      "aliases": [
-        "гопник",
-        "пацан",
-        "быдло"
-      ],
-      "audio": "gopnik.wav",
-      "transcript_file": "gopnik.txt",
-      "speed": 1.08,
-      "ffmpeg_fx": "equalizer=f=240:width_type=o:width=1.5:g=3,acompressor=threshold=-15dB:ratio=3"
-    },
-    "anime": {
-      "label": "Анимешница",
-      "aliases": [
-        "анимешница",
-        "аниме",
-        "тян",
-        "тянка"
-      ],
-      "audio": "anime.wav",
-      "transcript_file": "anime.txt",
-      "speed": 1.14,
-      "ffmpeg_fx": "asetrate=24000*1.09051,aresample=24000,atempo=0.91700,equalizer=f=3500:width_type=o:width=1.5:g=2"
-    },
-    "shizo": {
-      "label": "Шизофилософ",
-      "aliases": [
-        "шизофилософ",
-        "шиз",
-        "философ"
-      ],
-      "audio": "shizo.wav",
-      "transcript_file": "shizo.txt",
-      "speed": 0.88,
-      "ffmpeg_fx": "aecho=0.8:0.88:42:0.28,equalizer=f=350:width_type=o:width=1.5:g=3"
-    },
-    "skuf": {
-      "label": "Скуф",
-      "aliases": [
-        "скуф"
-      ],
-      "audio": "skuf.wav",
-      "transcript_file": "skuf.txt",
-      "speed": 0.93,
-      "ffmpeg_fx": "asetrate=24000*0.95484,aresample=24000,atempo=1.04729,equalizer=f=160:width_type=o:width=1.5:g=3"
-    },
-    "altushka": {
-      "label": "Альтушка",
-      "aliases": [
-        "альтушка",
-        "альт"
-      ],
-      "audio": "altushka.wav",
-      "transcript_file": "altushka.txt",
-      "speed": 0.95,
-      "ffmpeg_fx": "equalizer=f=280:width_type=o:width=1.5:g=2"
-    },
-    "tamada": {
-      "label": "Тамада",
-      "aliases": [
-        "тамада",
-        "ведущий"
-      ],
-      "audio": "tamada.wav",
-      "transcript_file": "tamada.txt",
-      "speed": 1.1,
-      "ffmpeg_fx": "acompressor=threshold=-12dB:ratio=5,equalizer=f=2500:width_type=o:width=1.5:g=3"
-    },
-    "robot": {
-      "label": "Робот",
-      "aliases": [
-        "робот",
-        "киборг",
-        "бот"
-      ],
-      "audio": "robot.wav",
-      "transcript_file": "robot.txt",
-      "speed": 1.0,
-      "ffmpeg_fx": "flanger=delay=3:depth=3:regen=78:width=80:speed=4,aecho=0.8:0.5:12:0.45,equalizer=f=1300:width_type=o:width=1.2:g=5"
-    },
-    "arsen": {
-      "label": "Арсен Маркарян",
-      "aliases": [
-        "арсен",
-        "маркарян",
-        "арсен маркарян",
-        "коуч"
-      ],
-      "audio": "arsen.wav",
-      "transcript_file": "arsen.txt",
-      "speed": 1.0
-    },
-    "kot": {
-      "label": "Кот",
-      "aliases": [
-        "кот",
-        "котик",
-        "мяу"
-      ],
-      "audio": "kot.wav",
-      "transcript_file": "kot.txt",
-      "speed": 1.1,
-      "ffmpeg_fx": "asetrate=24000*1.10957,aresample=24000,atempo=0.90125,equalizer=f=2400:width_type=o:width=1.5:g=2"
-    },
-    "demon": {
-      "label": "Демон",
-      "aliases": [
-        "демон",
-        "сатана",
-        "дьявол",
-        "ад"
-      ],
-      "audio": "demon.wav",
-      "transcript_file": "demon.txt",
-      "speed": 0.9,
-      "ffmpeg_fx": "asetrate=24000*0.88067,aresample=24000,atempo=1.13550,aecho=0.8:0.85:45|85:0.35|0.25,equalizer=f=95:width_type=o:width=1.5:g=5"
-    },
     "artem": {
       "label": "Артём",
-      "aliases": [
-        "артем",
-        "артём",
-        "artem"
-      ],
-      "audio": "default.wav",
-      "transcript_file": "default.txt",
+      "aliases": ["артем", "артём", "artem"],
+      "audio": "artem.wav",
+      "transcript_file": "artem.txt",
       "avatar_dir": "avatars/artem",
       "speed": 1.04
     },
     "karina": {
       "label": "Карина",
-      "aliases": [
-        "карина",
-        "karina"
-      ],
-      "audio": "masha.wav",
-      "transcript_file": "masha.txt",
+      "aliases": ["карина", "karina"],
+      "audio": "karina.wav",
+      "transcript_file": "karina.txt",
       "avatar_dir": "avatars/karina",
       "speed": 0.99,
       "ffmpeg_fx": "equalizer=f=240:width_type=o:width=1.5:g=2"
     },
     "ksyusha": {
       "label": "Ксюша",
-      "aliases": [
-        "ксюша",
-        "ksyusha"
-      ],
-      "audio": "masha.wav",
-      "transcript_file": "masha.txt",
+      "aliases": ["ксюша", "ksyusha"],
+      "audio": "ksyusha.wav",
+      "transcript_file": "ksyusha.txt",
       "avatar_dir": "avatars/ksyusha",
       "speed": 1.05,
       "ffmpeg_fx": "equalizer=f=2800:width_type=o:width=1.5:g=2"
     },
     "katya": {
       "label": "Катя",
-      "aliases": [
-        "катя",
-        "katya"
-      ],
-      "audio": "altushka.wav",
-      "transcript_file": "altushka.txt",
+      "aliases": ["катя", "katya"],
+      "audio": "katya.wav",
+      "transcript_file": "katya.txt",
       "avatar_dir": "avatars/katya",
       "speed": 0.98
+    },
+    "nikita": {
+      "label": "Никита",
+      "aliases": ["никита", "nikita"],
+      "audio": "nikita.wav",
+      "transcript_file": "nikita.txt",
+      "avatar_dir": "avatars/nikita",
+      "speed": 1.01
+    },
+    "veronika": {
+      "label": "Вероника",
+      "aliases": ["вероника", "veronika"],
+      "audio": "veronika.wav",
+      "transcript_file": "veronika.txt",
+      "avatar_dir": "avatars/veronika",
+      "speed": 1.03
+    },
+    "liza": {
+      "label": "Лиза",
+      "aliases": ["лиза", "liza"],
+      "audio": "liza.wav",
+      "transcript_file": "liza.txt",
+      "avatar_dir": "avatars/liza",
+      "speed": 1.06,
+      "ffmpeg_fx": "equalizer=f=2600:width_type=o:width=1.5:g=2"
+    },
+    "serezha": {
+      "label": "Серёжа",
+      "aliases": ["сережа", "серёжа", "serezha"],
+      "audio": "serezha.wav",
+      "transcript_file": "serezha.txt",
+      "avatar_dir": "avatars/serezha",
+      "speed": 1.02
+    },
+    "alena": {
+      "label": "Алёна (бывшая)",
+      "aliases": ["алена", "алёна", "бывшая", "alena"],
+      "audio": "alena.wav",
+      "transcript_file": "alena.txt",
+      "avatar_dir": "avatars/alena",
+      "speed": 1.02
+    },
+    "fedya": {
+      "label": "Федя",
+      "aliases": ["федя", "fedya"],
+      "audio": "fedya.wav",
+      "transcript_file": "fedya.txt",
+      "avatar_dir": "avatars/fedya",
+      "speed": 1.0
+    },
+    "ruslan": {
+      "label": "Руслан",
+      "aliases": ["руслан", "ruslan"],
+      "audio": "ruslan.wav",
+      "transcript_file": "ruslan.txt",
+      "avatar_dir": "avatars/ruslan",
+      "speed": 1.03
+    },
+    "choknutiy": {
+      "label": "Чокнутый",
+      "aliases": ["чокнутый", "choknutiy"],
+      "audio": "choknutiy.wav",
+      "transcript_file": "choknutiy.txt",
+      "avatar_dir": "avatars/choknutiy",
+      "speed": 1.08
+    },
+    "arsen": {
+      "label": "Арсен Маркарян",
+      "aliases": ["арсен", "маркарян", "арсен маркарян", "коуч"],
+      "audio": "arsen.wav",
+      "transcript_file": "arsen.txt",
+      "speed": 1.0
+    },
+    "demon": {
+      "label": "Демон",
+      "aliases": ["демон", "сатана", "дьявол", "ад"],
+      "audio": "demon.wav",
+      "transcript_file": "demon.txt",
+      "speed": 0.9,
+      "ffmpeg_fx": "asetrate=24000*0.88067,aresample=24000,atempo=1.13550,aecho=0.8:0.85:45|85:0.35|0.25,equalizer=f=95:width_type=o:width=1.5:g=5"
     }
   }
 }
