@@ -315,21 +315,51 @@ def _apply_smooth_motion(
     frame: np.ndarray,
     *,
     t_sec: float,
+    duration: float,
     energy: float,
     emotion: str,
+    camera: str = "auto",
     size: int,
 ) -> bytes:
-    """Apply subtle breathing/speech nod without side-to-side swaying or tilt."""
+    """Apply subtle breathing/speech nod plus optional camera pan/zoom without black edges."""
     emo_bounce = 1.2 if emotion in ("happy", "laugh") else (0.7 if emotion == "sad" else 1.0)
-    scale = 1.015 + 0.004 * math.sin(2.0 * math.pi * 0.35 * t_sec) + 0.008 * energy * emo_bounce
-    dy = -1.6 * energy * emo_bounce
+    progress = min(1.0, max(0.0, t_sec / max(0.5, duration)))
+    ease = 0.5 - 0.5 * math.cos(math.pi * progress)
+
+    cam = (camera or "auto").strip().lower()
+    cam_dx = 0.0
+    cam_dy = 0.0
+    cam_zoom = 0.0
+    if cam in ("pan_left", "left"):
+        cam_dx = 12.0 * (1.0 - 2.0 * ease)
+        cam_zoom = 0.065
+    elif cam in ("pan_right", "right"):
+        cam_dx = -12.0 * (1.0 - 2.0 * ease)
+        cam_zoom = 0.065
+    elif cam in ("pan_up", "up"):
+        cam_dy = 12.0 * (1.0 - 2.0 * ease)
+        cam_zoom = 0.065
+    elif cam in ("pan_down", "down"):
+        cam_dy = -12.0 * (1.0 - 2.0 * ease)
+        cam_zoom = 0.065
+    elif cam in ("zoom_in", "in"):
+        cam_zoom = 0.12 * ease
+    elif cam in ("zoom_out", "out"):
+        cam_zoom = 0.12 * (1.0 - ease)
+    elif cam == "shake":
+        cam_dx = 4.5 * math.sin(2.0 * math.pi * 3.5 * t_sec) * (0.4 + 0.6 * energy)
+        cam_dy = 3.5 * math.cos(2.0 * math.pi * 2.8 * t_sec) * (0.4 + 0.6 * energy)
+        cam_zoom = 0.05
+
+    scale = 1.015 + cam_zoom + 0.004 * math.sin(2.0 * math.pi * 0.35 * t_sec) + 0.008 * energy * emo_bounce
+    dy = cam_dy - 1.6 * energy * emo_bounce
 
     cx = size * 0.5
     cy = size * 0.5
     inv_scale = 1.0 / scale
     a = inv_scale
     b = 0.0
-    c = cx - inv_scale * cx
+    c = cx - inv_scale * (cx + cam_dx)
     d = 0.0
     e = inv_scale
     f = cy - inv_scale * (cy + dy)
@@ -351,6 +381,7 @@ def render_talking_avatar_mp4(
     avatar_dir: Path,
     output_audio_path: Path | None = None,
     emotion: str = "neutral",
+    camera: str = "auto",
     size: int = AVATAR_SIZE,
     fps: int = AVATAR_FPS,
 ) -> tuple[Path, int]:
@@ -432,8 +463,10 @@ def render_talking_avatar_mp4(
             raw_bytes = _apply_smooth_motion(
                 blended,
                 t_sec=idx / max(1, fps),
+                duration=duration,
                 energy=level,
                 emotion=emotion,
+                camera=camera,
                 size=size,
             )
             proc.stdin.write(raw_bytes)

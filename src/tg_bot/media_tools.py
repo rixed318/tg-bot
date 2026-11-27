@@ -51,6 +51,7 @@ GIF_DIRECTIVE = re.compile(r"^\[\[(?:make-)?gif\]\]$")
 EMOTION_DIRECTIVE = re.compile(r"^\[\[emotion:(?P<emotion>[a-zA-Z_-]+)\]\]$")
 SINGING_COVER_DIRECTIVE = re.compile(r"^\[\[singing-cover(?::(?P<mid>\d+))?\]\]$")
 RICH_TEXT_DIRECTIVE = re.compile(r"^\[\[rich-text\]\]$")
+CAMERA_DIRECTIVE = re.compile(r"^\[\[camera:(?P<camera>[a-zA-Z0-9_-]+)\]\]$")
 
 MEDIA_CATALOG: dict[str, dict[str, Any]] = {
     "anya_tiktok": {
@@ -107,6 +108,7 @@ class AgentResponse:
     singing_cover: bool = False
     singing_cover_message_id: int | None = None
     rich_text: bool = False
+    camera: str = "auto"
 
 
 def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
@@ -131,11 +133,16 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
     singing_cover = False
     singing_cover_message_id: int | None = None
     rich_text = False
+    camera = "auto"
 
     for line in response.splitlines():
         stripped = line.strip()
         if RICH_TEXT_DIRECTIVE.fullmatch(stripped):
             rich_text = True
+            continue
+        camera_match = CAMERA_DIRECTIVE.fullmatch(stripped)
+        if camera_match:
+            camera = camera_match.group("camera").strip().lower()
             continue
         cover_match = SINGING_COVER_DIRECTIVE.fullmatch(stripped)
         if cover_match:
@@ -253,6 +260,7 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
         singing_cover=singing_cover,
         singing_cover_message_id=singing_cover_message_id,
         rich_text=rich_text,
+        camera=camera,
     )
 
 
@@ -412,6 +420,8 @@ def find_source_video(
 
 
 def run_sticker_or_gif(source_media: Path, output_path: Path, mode: str) -> Path:
+    if mode == "sticker" and source_media.suffix.lower() not in VIDEO_SUFFIXES:
+        return make_clean_sticker_webp(source_media, output_path)
     py = str(RIXED_MUSIC_VENV_PY if RIXED_MUSIC_VENV_PY.is_file() else "python3")
     script = str(STICKER_GIF_SCRIPT)
     subprocess.run(
@@ -421,6 +431,58 @@ def run_sticker_or_gif(source_media: Path, output_path: Path, mode: str) -> Path
         text=True,
         timeout=90,
     )
+    return output_path
+
+
+def make_clean_sticker_webp(source_media: Path, output_path: Path) -> Path:
+    """Convert any image into a cleanly centered 512x512 transparent Telegram WebP sticker."""
+    from PIL import Image, ImageFilter, ImageOps
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    cutout_tmp = output_path.with_name(f"{output_path.stem}_cutout.png")
+    work_src = source_media
+    if cleanup_cutout_helper_available():
+        try:
+            subprocess.run(
+                [
+                    str(RIXED_MUSIC_VENV_PY),
+                    str(CUTOUT_SCRIPT),
+                    str(source_media),
+                    str(cutout_tmp),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=90,
+            )
+            if cutout_tmp.is_file() and cutout_tmp.stat().st_size > 0:
+                work_src = cutout_tmp
+        except Exception:
+            LOGGER.warning("Cutout helper failed for %s, using centered crop", source_media.name)
+
+    with Image.open(work_src) as im:
+        im = ImageOps.exif_transpose(im).convert("RGBA")
+        alpha = im.getchannel("A")
+        bbox = alpha.getbbox()
+        if bbox:
+            im = im.crop(bbox)
+        # Fit into 472x472 inside 512x512 canvas (20px safe margin on each side)
+        max_side = 472
+        im.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+        canvas = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
+        ox = (512 - im.width) // 2
+        oy = (512 - im.height) // 2
+        # Add subtle crisp white sticker outline when transparency exists
+        a_ch = im.getchannel("A")
+        if a_ch.getextrema()[0] < 250:
+            dilated = a_ch.filter(ImageFilter.MaxFilter(9))
+            outline = Image.new("RGBA", im.size, (255, 255, 255, 235))
+            outline.putalpha(dilated)
+            canvas.paste(outline, (ox, oy), outline)
+        canvas.paste(im, (ox, oy), im)
+        canvas.save(output_path, format="WEBP", quality=92, method=6)
+    if cutout_tmp.is_file():
+        cutout_tmp.unlink(missing_ok=True)
     return output_path
 
 

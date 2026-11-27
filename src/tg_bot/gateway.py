@@ -131,13 +131,12 @@ def _build_main_panel() -> tuple[str, InlineKeyboardMarkup]:
             [mute_btn, fmt_btn],
             [display_btn, userbot_btn],
             [
-                InlineKeyboardButton(text="🎙 Голос (отдельно)", callback_data="cmd:menu:voice"),
-                InlineKeyboardButton(text="🧠 Поведение (отдельно)", callback_data="cmd:menu:persona"),
+                InlineKeyboardButton(text="🎙 Голос", callback_data="cmd:menu:voice"),
+                InlineKeyboardButton(text="🧠 Поведение", callback_data="cmd:menu:persona"),
             ],
-            [InlineKeyboardButton(text="🎭 Пресет (Голос + Поведение вместе)", callback_data="cmd:menu:char")],
             [
+                InlineKeyboardButton(text="👗 Визуал", callback_data="cmd:menu:visual"),
                 InlineKeyboardButton(text="🤖 Модель ИИ", callback_data="cmd:menu:ai"),
-                InlineKeyboardButton(text="🔄 Обновить", callback_data="cmd:home"),
             ],
             [InlineKeyboardButton(text="✖️ Закрыть", callback_data="cmd:close")],
         ]
@@ -299,11 +298,10 @@ async def main() -> None:
             enabled = parts[2] == "1"
             set_bot_setting("use_userbot", "1" if enabled else "0")
             await callback.answer("Отправка: Telegram Premium" if enabled else "Отправка: Бот")
-        elif action == "setchar" and len(parts) > 2:
-            cid = parts[2]
-            set_bot_setting("voice_profile", cid)
-            set_bot_setting("persona", cid)
-            await callback.answer(f"Персонаж: {_label_for(CHARACTER_CATALOG, cid, cid)}")
+        elif action == "setvisual" and len(parts) > 2:
+            mode = "funny" if parts[2] == "funny" else "quality"
+            set_bot_setting("speech_display", mode)
+            await callback.answer("Визуал: Ржачный" if mode == "funny" else "Визуал: Обычный (2D)")
         elif action == "setvoice" and len(parts) > 2:
             cid = parts[2]
             set_bot_setting("voice_profile", cid)
@@ -320,12 +318,16 @@ async def main() -> None:
         settings = get_bot_settings()
         if action == "menu" and len(parts) > 2:
             sub = parts[2]
-            if sub == "char":
+            if sub == "visual":
+                visual_items = [
+                    ("quality", "✨ Обычный (2D пиксель-арт)"),
+                    ("funny", "🤪 Ржачный (живое фото)"),
+                ]
                 text, kb = _build_grid_panel(
-                    "🎭 <b>Выбери персонажа (меняет сразу и голос, и поведение):</b>",
-                    CHARACTER_CATALOG,
-                    settings.get("voice_profile", "default"),
-                    "cmd:setchar",
+                    "👗 <b>Выбери визуальный стиль аватара:</b>",
+                    visual_items,
+                    settings.get("speech_display", "quality"),
+                    "cmd:setvisual",
                 )
             elif sub == "voice":
                 text, kb = _build_grid_panel(

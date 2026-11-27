@@ -392,6 +392,7 @@ def _send_voice_reply(
     *,
     reply_to_message_id: int | None,
     emotion: str = "neutral",
+    camera: str = "auto",
 ) -> tuple[int, str]:
     """Synthesize spoken_text, render talking-avatar VideoNote (if enabled) or Voice, and archive."""
     profiles = load_voice_profiles()
@@ -429,6 +430,7 @@ def _send_voice_reply(
                 mp4_path,
                 avatar_dir=avatar_dir,
                 emotion=emotion,
+                camera=camera,
             )
             mid = send_video_note(
                 token,
@@ -1018,11 +1020,34 @@ def process_one(token: str) -> bool:
             if (parsed.make_sticker or parsed.cutout_photo) and not any(
                 "sticker" in p.name.lower() or p.suffix.lower() == ".webp" for p in downloaded_files
             ):
-                source_media = attachment or (context_attachments[0] if context_attachments else None)
-                if source_media:
+                sticker_sources: list[Path] = []
+                if attachment is not None:
+                    sticker_sources.append(attachment)
+                # Also collect all non-primary photo attachments across unanswered batch (up to 10!)
+                seen_fids: set[str] = {str(task.get("photo_file_id") or "")}
+                for u_idx, u_item in enumerate(unanswered):
+                    fid = str(u_item.get("photo_file_id") or "")
+                    if not fid or fid in seen_fids:
+                        continue
+                    u_txt = str(u_item.get("text") or "").lower()
+                    if any(m in u_txt for m in ("аудиотрек", "голосовое", "видеосообщение")):
+                        continue
+                    seen_fids.add(fid)
+                    try:
+                        dl = download_telegram_file(token, fid, work_dir, f"sticker-src-{u_idx}")
+                        if dl.suffix.lower() in (PHOTO_SUFFIXES | VIDEO_SUFFIXES):
+                            sticker_sources.append(dl)
+                    except Exception:
+                        LOGGER.warning("Could not download batch sticker photo %s", u_idx)
+                    if len(sticker_sources) >= 10:
+                        break
+                if not sticker_sources and context_attachments:
+                    sticker_sources.append(context_attachments[0])
+
+                for s_idx, source_media in enumerate(sticker_sources, start=1):
                     is_vid = source_media.suffix.lower() in VIDEO_SUFFIXES
                     out_sticker = work_dir / "outbox" / (
-                        f"sticker_{task_id}.webm" if is_vid else f"sticker_{task_id}.webp"
+                        f"sticker_{task_id}_{s_idx}.webm" if is_vid else f"sticker_{task_id}_{s_idx}.webp"
                     )
                     mode = "video_sticker" if is_vid else "sticker"
                     try:
@@ -1030,10 +1055,10 @@ def process_one(token: str) -> bool:
                         if out_sticker.is_file():
                             downloaded_files = (*downloaded_files, out_sticker)
                             archive_on_drive(
-                                out_sticker, task, category="stickers", stable_key=f"sticker:{task_id}"
+                                out_sticker, task, category="stickers", stable_key=f"sticker:{task_id}:{s_idx}"
                             )
                     except Exception:
-                        LOGGER.exception("Sticker creation failed for task %s", task_id)
+                        LOGGER.exception("Sticker creation failed for task %s item %s", task_id, s_idx)
 
             if parsed.make_gif and not any(
                 "anim" in p.name.lower() or p.suffix.lower() == ".gif" for p in downloaded_files
@@ -1107,6 +1132,7 @@ def process_one(token: str) -> bool:
                     work_dir,
                     reply_to_message_id=anchor_msg_id,
                     emotion=parsed.emotion,
+                    camera=parsed.camera,
                 )
 
             outgoing_photos = (
