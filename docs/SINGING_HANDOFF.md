@@ -9,8 +9,10 @@ Audio requests containing `спой`, `спеть`, `перепой`, `пере�
 2. Demucs `htdemucs --two-stems=vocals` produces `vocals.wav` and
    `no_vocals.wav`.
 3. Seed-VC's F0-conditioned 44.1 kHz model converts the isolated vocal to the
-   currently selected bot voice. It retains the source melody, lyrics and
-   timing; F5-TTS is deliberately not used for singing.
+   currently selected bot voice. Automatic F0 adjustment shifts the source
+   register to the reference voice (important for male-source → female-profile
+   covers) while retaining the melody, lyrics and timing. F5-TTS is deliberately
+   not used for singing.
 4. The converted vocal is mixed back over the original instrumental.
 5. Both the mix and isolated converted vocal are split into 55-second chunks.
    The vocal chunk drives avatar mouth motion while the final video-note audio

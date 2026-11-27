@@ -10,6 +10,7 @@ import json
 import logging
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -20,6 +21,7 @@ from tg_bot.avatar_video import render_talking_avatar_mp4, resolve_avatar_dir
 from tg_bot.config import (
     AGY_BIN,
     AUDIO_SUFFIXES,
+    CACHE_DIR,
     DRIVE_SYNC_INTERVAL_SECONDS,
     GROUP_DEBOUNCE_SECONDS,
     PHOTO_SUFFIXES,
@@ -297,6 +299,7 @@ def _send_singing_cover_reply(
         )
 
         message_ids: list[int] = []
+        archive_items: list[tuple[Path, str]] = []
         reply_id: int | None = reply_to_message_id
         for index, (vocal_chunk, mixed_chunk) in enumerate(
             zip(artifacts.vocal_chunks, artifacts.mixed_chunks), start=1
@@ -318,22 +321,66 @@ def _send_singing_cover_reply(
             )
             message_ids.append(message_id)
             reply_id = message_id
-            archive_on_drive(
-                rendered,
-                task,
-                category="singing_covers",
-                stable_key=f"singing-cover:{task['id']}:{index}",
+            LOGGER.info(
+                "Sent singing-cover video_note task=%s part=%s msg_id=%s duration=%ss voice=%s",
+                task["id"],
+                index,
+                message_id,
+                duration,
+                voice_name,
             )
-        archive_on_drive(
-            artifacts.mixed_audio,
-            task,
-            category="singing_covers",
-            stable_key=f"singing-cover:{task['id']}:audio",
+            archive_items.append(
+                (rendered, f"singing-cover:{task['id']}:{index}")
+            )
+        archive_items.append(
+            (artifacts.mixed_audio, f"singing-cover:{task['id']}:audio")
         )
+        _archive_singing_files_in_background(task, archive_items)
         return message_ids, voice_name
     finally:
         stop_pulse.set()
         pulse_thread.join(timeout=2)
+
+
+def _archive_singing_files_in_background(
+    task: dict[str, Any], items: list[tuple[Path, str]]
+) -> None:
+    """Stage delivered covers outside the task temp dir and upload asynchronously."""
+    staging = CACHE_DIR / "pending-singing-archives" / (
+        f"task-{task['id']}-{time.time_ns()}"
+    )
+    staging.mkdir(parents=True, exist_ok=False)
+    staged: list[tuple[Path, str]] = []
+    for index, (source, stable_key) in enumerate(items, start=1):
+        target = staging / f"{index:02d}{source.suffix.lower()}"
+        shutil.copy2(source, target)
+        staged.append((target, stable_key))
+
+    def _upload() -> None:
+        try:
+            for path, stable_key in staged:
+                try:
+                    archive_on_drive(
+                        path,
+                        task,
+                        category="singing_covers",
+                        stable_key=stable_key,
+                    )
+                except Exception as exc:
+                    LOGGER.warning("Failed to archive %s: %s", stable_key, exc)
+        finally:
+            for path, _ in staged:
+                path.unlink(missing_ok=True)
+            try:
+                staging.rmdir()
+            except OSError:
+                pass
+
+    threading.Thread(
+        target=_upload,
+        name=f"singing-archive-{task['id']}",
+        daemon=True,
+    ).start()
 
 
 def _send_voice_reply(

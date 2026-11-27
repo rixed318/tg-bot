@@ -201,7 +201,7 @@ def build_singing_cover(
             "--f0-condition",
             "True",
             "--auto-f0-adjust",
-            "False",
+            "True",
             "--semi-tone-shift",
             "0",
             "--checkpoint",
