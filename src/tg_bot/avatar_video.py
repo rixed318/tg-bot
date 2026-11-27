@@ -142,12 +142,12 @@ def resolve_avatar_dir(
     if profile_name and profile_name.strip() and profile_name.strip() not in candidates:
         candidates.append(profile_name.strip())
 
-    funny_mode = speech_display.strip().lower() == "funny"
+    variant = speech_display.strip().lower()
     for name in candidates:
-        if funny_mode:
-            funny_dir = VOICES_DIR / "avatars" / f"{name}_funny"
-            if funny_dir.is_dir() and (funny_dir / "neutral_closed.png").is_file():
-                return funny_dir
+        if variant and variant not in ("quality", "default", "normal"):
+            variant_dir = VOICES_DIR / "avatars" / f"{name}_{variant}"
+            if variant_dir.is_dir() and (variant_dir / "neutral_closed.png").is_file():
+                return variant_dir
         entry = profiles.get(name) or {}
         rel_dir = entry.get("avatar_dir")
         if rel_dir:

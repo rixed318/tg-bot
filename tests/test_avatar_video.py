@@ -68,10 +68,13 @@ def test_resolve_avatar_dir_uses_funny_variant_when_requested(
 ) -> None:
     quality_dir = tmp_path / "avatars" / "artem"
     funny_dir = tmp_path / "avatars" / "artem_funny"
+    street_dir = tmp_path / "avatars" / "artem_street"
     quality_dir.mkdir(parents=True)
     funny_dir.mkdir(parents=True)
+    street_dir.mkdir(parents=True)
     (quality_dir / "neutral_closed.png").touch()
     (funny_dir / "neutral_closed.png").touch()
+    (street_dir / "neutral_closed.png").touch()
     monkeypatch.setattr(avatar_video, "VOICES_DIR", tmp_path)
     profiles = {"profiles": {"artem": {"avatar_dir": "avatars/artem"}}}
 
@@ -81,6 +84,10 @@ def test_resolve_avatar_dir_uses_funny_variant_when_requested(
     funny = avatar_video.resolve_avatar_dir(
         "artem", profiles, speech_display="funny"
     )
+    street = avatar_video.resolve_avatar_dir(
+        "artem", profiles, speech_display="street"
+    )
 
     assert quality == quality_dir
     assert funny == funny_dir
+    assert street == street_dir

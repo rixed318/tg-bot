@@ -302,9 +302,14 @@ async def main() -> None:
             set_bot_setting("use_userbot", "1" if enabled else "0")
             await callback.answer("Отправка: Telegram Premium" if enabled else "Отправка: Бот")
         elif action == "setvisual" and len(parts) > 2:
-            mode = "funny" if parts[2] == "funny" else "quality"
+            mode = parts[2] if parts[2] in ("quality", "street", "funny") else "quality"
             set_bot_setting("speech_display", mode)
-            await callback.answer("Визуал: Ржачный" if mode == "funny" else "Визуал: Обычный (2D)")
+            labels = {
+                "quality": "Визуал: Обычный (2D)",
+                "street": "Визуал: Streetwear (2D)",
+                "funny": "Визуал: Ржачный",
+            }
+            await callback.answer(labels[mode])
         elif action == "setvoice" and len(parts) > 2:
             cid = parts[2]
             set_bot_setting("voice_profile", cid)
@@ -319,28 +324,127 @@ async def main() -> None:
             await callback.answer(f"ИИ: {_label_for(AI_MODELS, mid, mid)}")
         elif action == "game" and len(parts) > 2:
             subgame = parts[2]
+            arg = parts[3] if len(parts) > 3 else ""
             try:
-                from tg_bot.games import format_leaderboard_html, play_dice_duel_round
+                from tg_bot import games as gmod
             except ImportError:
-                from joke_bot_games import format_leaderboard_html, play_dice_duel_round
+                import joke_bot_games as gmod
+            u = callback.from_user
+            cid = callback.message.chat.id if callback.message else u.id
+            uname = u.username or ""
+            dname = u.full_name or str(u.id)
+
             if subgame == "duel":
-                u = callback.from_user
-                gtext = play_dice_duel_round(
-                    user_id=u.id,
-                    username=u.username or "",
-                    display_name=u.full_name or str(u.id),
+                gtext = gmod.play_dice_duel_round(user_id=u.id, username=uname, display_name=dname)
+                gkb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(text="🎲 Ещё раз", callback_data="cmd:game:duel"),
+                            InlineKeyboardButton(text="🏆 Рекорды", callback_data="cmd:game:top:dice_duel"),
+                        ],
+                        [InlineKeyboardButton(text="⬅️ Игры", callback_data="cmd:menu:games")],
+                    ]
                 )
-            else:
-                gtext = format_leaderboard_html("dice_duel")
-            gkb = InlineKeyboardMarkup(
-                inline_keyboard=[
+            elif subgame == "snake":
+                if arg in ("up", "down", "left", "right"):
+                    gtext, alive = gmod.step_snake_game(
+                        chat_id=cid, user_id=u.id, username=uname, display_name=dname, direction=arg
+                    )
+                else:
+                    gtext, alive = gmod.start_snake_game(
+                        chat_id=cid, user_id=u.id, username=uname, display_name=dname
+                    )
+                rows_kb = []
+                if alive:
+                    rows_kb = [
+                        [InlineKeyboardButton(text="⬆️", callback_data="cmd:game:snake:up")],
+                        [
+                            InlineKeyboardButton(text="⬅️", callback_data="cmd:game:snake:left"),
+                            InlineKeyboardButton(text="⬇️", callback_data="cmd:game:snake:down"),
+                            InlineKeyboardButton(text="➡️", callback_data="cmd:game:snake:right"),
+                        ],
+                    ]
+                rows_kb.append(
                     [
-                        InlineKeyboardButton(text="🎲 Ещё раз", callback_data="cmd:game:duel"),
-                        InlineKeyboardButton(text="🏆 Рекорды", callback_data="cmd:game:top"),
-                    ],
-                    [InlineKeyboardButton(text="⬅️ Назад", callback_data="cmd:home")],
-                ]
-            )
+                        InlineKeyboardButton(text="🔄 Новая игра", callback_data="cmd:game:snake:start"),
+                        InlineKeyboardButton(text="🏆 Топ Змейки", callback_data="cmd:game:top:snake"),
+                    ]
+                )
+                rows_kb.append([InlineKeyboardButton(text="⬅️ Игры", callback_data="cmd:menu:games")])
+                gkb = InlineKeyboardMarkup(inline_keyboard=rows_kb)
+            elif subgame == "mafia":
+                toast = ""
+                if arg == "join":
+                    toast = gmod.mafia_join(cid, u.id, uname, dname)
+                    gtext = gmod.mafia_status_html(cid)
+                elif arg == "leave":
+                    toast = gmod.mafia_leave(cid, u.id)
+                    gtext = gmod.mafia_status_html(cid)
+                elif arg == "reset":
+                    gmod.mafia_reset(cid)
+                    gtext = gmod.mafia_status_html(cid)
+                elif arg == "start":
+                    ok, gtext, dms = gmod.mafia_start(cid)
+                    if ok:
+                        for pid, dm_text in dms:
+                            try:
+                                await bot.send_message(pid, dm_text, parse_mode="HTML")
+                            except Exception:
+                                pass
+                    else:
+                        toast = gtext
+                        gtext = gmod.mafia_status_html(cid)
+                elif arg == "vote" and len(parts) > 4:
+                    gtext, _ = gmod.mafia_vote(cid, u.id, int(parts[4]))
+                else:
+                    gtext = gmod.mafia_status_html(cid)
+
+                alive_players = gmod.mafia_get_alive_players(cid)
+                if "Дневное голосование" in gtext and alive_players:
+                    vote_rows = [
+                        [
+                            InlineKeyboardButton(
+                                text=f"⚖️ @{p['username']}" if p.get("username") else f"⚖️ {p['display_name']}",
+                                callback_data=f"cmd:game:mafia:vote:{p['user_id']}",
+                            )
+                        ]
+                        for p in alive_players
+                    ]
+                    vote_rows.append([InlineKeyboardButton(text="🔄 Сбросить партию", callback_data="cmd:game:mafia:reset")])
+                    gkb = InlineKeyboardMarkup(inline_keyboard=vote_rows)
+                else:
+                    gkb = InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [
+                                InlineKeyboardButton(text="➕ Присоединиться", callback_data="cmd:game:mafia:join"),
+                                InlineKeyboardButton(text="➖ Выйти", callback_data="cmd:game:mafia:leave"),
+                            ],
+                            [
+                                InlineKeyboardButton(text="🚀 Начать игру", callback_data="cmd:game:mafia:start"),
+                                InlineKeyboardButton(text="🏆 Топ Мафии", callback_data="cmd:game:top:mafia"),
+                            ],
+                            [InlineKeyboardButton(text="⬅️ Игры", callback_data="cmd:menu:games")],
+                        ]
+                    )
+                await callback.answer(toast[:180] if toast else None)
+                try:
+                    await callback.message.edit_text(gtext, parse_mode="HTML", reply_markup=gkb)
+                except Exception:
+                    pass
+                return
+            else:
+                board_game = arg if arg in ("dice_duel", "snake", "mafia") else "dice_duel"
+                gtext = gmod.format_leaderboard_html(board_game)
+                gkb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(text="🎲 Кости", callback_data="cmd:game:top:dice_duel"),
+                            InlineKeyboardButton(text="🐍 Змейка", callback_data="cmd:game:top:snake"),
+                            InlineKeyboardButton(text="🕵️ Мафия", callback_data="cmd:game:top:mafia"),
+                        ],
+                        [InlineKeyboardButton(text="⬅️ Игры", callback_data="cmd:menu:games")],
+                    ]
+                )
             await callback.answer()
             try:
                 await callback.message.edit_text(gtext, parse_mode="HTML", reply_markup=gkb)
@@ -354,6 +458,7 @@ async def main() -> None:
             if sub == "visual":
                 visual_items = [
                     ("quality", "✨ Обычный (2D пиксель-арт)"),
+                    ("street", "🧥 Streetwear (2D наряд)"),
                     ("funny", "🤪 Ржачный (живое фото)"),
                 ]
                 text, kb = _build_grid_panel(
@@ -379,14 +484,19 @@ async def main() -> None:
             elif sub == "games":
                 text = (
                     "🎮 <b>Игры в чате</b>\n\n"
-                    "• <b>Дуэль на костях</b> — быстрая игра в чате с таблицей рекордов по Telegram ID и @username.\n"
-                    "• <b>Змейка / Мафия</b> — в активной разработке (см. roadmap)."
+                    "• <b>🐍 Змейка</b> — управляй прямо в сообщении кнопками!\n"
+                    "• <b>🕵️ Мафия</b> — лобби для компании (роли в ЛС + дневное голосование).\n"
+                    "• <b>🎲 Кости</b> — быстрая дуэль с таблицей рекордов по ID и @username."
                 )
                 kb = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(text="🎲 Бросить кости", callback_data="cmd:game:duel"),
-                            InlineKeyboardButton(text="🏆 Рекорды", callback_data="cmd:game:top"),
+                            InlineKeyboardButton(text="🐍 Змейка", callback_data="cmd:game:snake:start"),
+                            InlineKeyboardButton(text="🕵️ Мафия", callback_data="cmd:game:mafia:menu"),
+                        ],
+                        [
+                            InlineKeyboardButton(text="🎲 Кости", callback_data="cmd:game:duel"),
+                            InlineKeyboardButton(text="🏆 Рекорды", callback_data="cmd:game:top:dice_duel"),
                         ],
                         [InlineKeyboardButton(text="⬅️ Назад", callback_data="cmd:home")],
                     ]
