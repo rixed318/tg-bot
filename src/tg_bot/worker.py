@@ -400,6 +400,10 @@ def _send_voice_reply(
     else:
         avatar_enabled = bool(profiles.get("avatar_enabled", True))
     profile_override = bot_settings.get("voice_profile") or None
+    if not profile_override or profile_override == "default":
+        persona_fallback = str(bot_settings.get("persona") or "").strip()
+        if persona_fallback and persona_fallback in (profiles.get("profiles") or {}):
+            profile_override = persona_fallback
     send_chat_action(token, task, "record_video_note" if avatar_enabled else "record_voice")
 
     ogg_path = work_dir / f"voice_{task['id']}.ogg"
@@ -631,6 +635,63 @@ def _handle_voice_admin_command(
     return False
 
 
+def _find_cover_audio(
+    token: str,
+    task: dict[str, Any],
+    unanswered: list[dict[str, Any]],
+    work_dir: Path,
+    *,
+    target_mid: int | None = None,
+    fallback_attachment: Path | None = None,
+) -> Path | None:
+    """Resolve the target audio track for a singing cover (by message_id, reply_to, attachment, or context)."""
+    all_items = [*unanswered, *(task.get("context") or [])]
+    preferred_mids: list[int] = []
+    if target_mid:
+        preferred_mids.append(target_mid)
+    for item in reversed(unanswered):
+        if item.get("reply_to_message_id"):
+            preferred_mids.append(int(item["reply_to_message_id"]))
+    if task.get("reply_to_message_id"):
+        preferred_mids.append(int(task["reply_to_message_id"]))
+
+    for mid in preferred_mids:
+        for item in reversed(all_items):
+            if int(item.get("message_id") or 0) == mid and item.get("photo_file_id"):
+                try:
+                    cand = download_telegram_file(
+                        token, str(item["photo_file_id"]), work_dir, f"cover-reply-{mid}"
+                    )
+                    if cand.suffix.lower() in AUDIO_SUFFIXES:
+                        return cand
+                except Exception:
+                    LOGGER.warning("Could not download replied-to audio %s", mid, exc_info=True)
+
+    if fallback_attachment is not None and fallback_attachment.suffix.lower() in AUDIO_SUFFIXES:
+        return fallback_attachment
+
+    audio_markers = ("аудиотрек", "голосовое", "audio")
+    recent_audio_items = [
+        item
+        for item in all_items
+        if item.get("photo_file_id")
+        and any(m in str(item.get("text") or "").lower() for m in audio_markers)
+    ]
+    for item in reversed(recent_audio_items[-4:]):
+        try:
+            cand = download_telegram_file(
+                token,
+                str(item["photo_file_id"]),
+                work_dir,
+                f"cover-src-{item.get('message_id', 'x')}",
+            )
+            if cand.suffix.lower() in AUDIO_SUFFIXES:
+                return cand
+        except Exception:
+            LOGGER.warning("Could not download recent audio for cover", exc_info=True)
+    return None
+
+
 def _send_large_document(task: dict[str, Any], path: Path, reply_to_message_id: int | None) -> int:
     command = [
         "/home/rus/.local/share/rixed-joke-userbot/venv/bin/python",
@@ -677,32 +738,17 @@ def process_one(token: str) -> bool:
             attachment = _transcribe_unanswered_audio(token, task, unanswered, work_dir)
             user_text = str(task.get("text") or "")
 
-            cover_audio: Path | None = (
-                attachment
-                if attachment is not None and attachment.suffix.lower() in AUDIO_SUFFIXES
+            cover_audio = (
+                _find_cover_audio(
+                    token,
+                    task,
+                    unanswered,
+                    work_dir,
+                    fallback_attachment=attachment,
+                )
+                if is_singing_cover_request(unanswered)
                 else None
             )
-            if cover_audio is None and is_singing_cover_request(unanswered):
-                audio_markers = ("аудиотрек", "голосовое", "audio")
-                recent_audio_items = [
-                    item
-                    for item in [*unanswered, *(task.get("context") or [])]
-                    if item.get("photo_file_id")
-                    and any(m in str(item.get("text") or "").lower() for m in audio_markers)
-                ]
-                for item in reversed(recent_audio_items[-3:]):
-                    try:
-                        cand = download_telegram_file(
-                            token,
-                            str(item["photo_file_id"]),
-                            work_dir,
-                            f"cover-src-{item.get('message_id', 'x')}",
-                        )
-                        if cand.suffix.lower() in AUDIO_SUFFIXES:
-                            cover_audio = cand
-                            break
-                    except Exception:
-                        LOGGER.warning("Could not download recent audio for cover", exc_info=True)
 
             if cover_audio is not None and is_singing_cover_request(unanswered):
                 anchor_message_id = max(
@@ -827,6 +873,46 @@ def process_one(token: str) -> bool:
                 return True
 
             parsed = parse_agent_response(raw_reply or "Слушаю, я на связи.", work_dir)
+            if parsed.singing_cover:
+                llm_cover_audio = _find_cover_audio(
+                    token,
+                    task,
+                    unanswered,
+                    work_dir,
+                    target_mid=parsed.singing_cover_message_id,
+                    fallback_attachment=attachment,
+                )
+                if llm_cover_audio is not None:
+                    anchor_message_id = max(
+                        int(item.get("message_id") or 0) for item in unanswered
+                    )
+                    message_ids, singing_voice = _send_singing_cover_reply(
+                        token,
+                        task,
+                        llm_cover_audio,
+                        work_dir,
+                        reply_to_message_id=anchor_message_id,
+                    )
+                    archive_text = (
+                        f"[singing-cover voice={singing_voice} parts={len(message_ids)}]"
+                    )
+                    remote_queue(
+                        "complete",
+                        "--ids",
+                        ",".join(claimed_ids),
+                        "--response-base64",
+                        encoded(archive_text),
+                        "--flag",
+                        "reply",
+                        "--reason-base64",
+                        encoded("модель запросила singing-cover по треку"),
+                        "--answered-up-to",
+                        str(anchor_message_id),
+                        "--primary-id",
+                        str(task["id"]),
+                    )
+                    _schedule_drive_sync()
+                    return True
             if suppress_for_live_mute(task):
                 remote_queue(
                     "complete",

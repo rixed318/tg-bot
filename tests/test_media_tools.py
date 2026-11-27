@@ -27,3 +27,12 @@ def test_multipart_contains_voice_field(tmp_path: Path) -> None:
     assert boundary.encode() in body
     assert b'name="voice"' in body
     assert b"OggS" in body
+
+
+def test_parses_singing_cover_directive(tmp_path: Path) -> None:
+    resp = parse_agent_response("Ща зачитаю!\n[[singing-cover:8528]]", tmp_path)
+    assert resp.singing_cover is True
+    assert resp.singing_cover_message_id == 8528
+    resp2 = parse_agent_response("Погнали\n[[singing-cover]]", tmp_path)
+    assert resp2.singing_cover is True
+    assert resp2.singing_cover_message_id is None

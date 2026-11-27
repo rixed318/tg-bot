@@ -44,9 +44,14 @@ def resolve_singing_reference(
     bot_settings: dict[str, Any], profiles_data: dict[str, Any]
 ) -> tuple[str, Path]:
     profiles = profiles_data.get("profiles") or {}
-    profile_name = str(
-        bot_settings.get("voice_profile") or profiles_data.get("active") or "default"
-    ).strip()
+    raw_voice = str(bot_settings.get("voice_profile") or "").strip()
+    raw_persona = str(bot_settings.get("persona") or "").strip()
+    if raw_voice and raw_voice != "default" and raw_voice in profiles:
+        profile_name = raw_voice
+    elif raw_persona and raw_persona in profiles:
+        profile_name = raw_persona
+    else:
+        profile_name = raw_voice or str(profiles_data.get("active") or "default").strip()
     entry = profiles.get(profile_name) or profiles.get("default") or {}
     audio_name = str(entry.get("audio") or "default.wav")
     audio_path = VOICES_DIR / audio_name

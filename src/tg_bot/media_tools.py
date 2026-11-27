@@ -49,6 +49,7 @@ DELETE_ALL_DIRECTIVE = re.compile(r"^\[\[delete-(?:all-)?bot-messages(?::(?P<cou
 STICKER_DIRECTIVE = re.compile(r"^\[\[(?:make-)?sticker\]\]$")
 GIF_DIRECTIVE = re.compile(r"^\[\[(?:make-)?gif\]\]$")
 EMOTION_DIRECTIVE = re.compile(r"^\[\[emotion:(?P<emotion>[a-zA-Z_-]+)\]\]$")
+SINGING_COVER_DIRECTIVE = re.compile(r"^\[\[singing-cover(?::(?P<mid>\d+))?\]\]$")
 
 MEDIA_CATALOG: dict[str, dict[str, Any]] = {
     "anya_tiktok": {
@@ -102,6 +103,8 @@ class AgentResponse:
     make_sticker: bool = False
     make_gif: bool = False
     emotion: str = "neutral"
+    singing_cover: bool = False
+    singing_cover_message_id: int | None = None
 
 
 def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
@@ -123,9 +126,18 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
     make_sticker = False
     make_gif = False
     emotion = "neutral"
+    singing_cover = False
+    singing_cover_message_id: int | None = None
 
     for line in response.splitlines():
         stripped = line.strip()
+        cover_match = SINGING_COVER_DIRECTIVE.fullmatch(stripped)
+        if cover_match:
+            singing_cover = True
+            raw_mid = cover_match.group("mid")
+            if raw_mid:
+                singing_cover_message_id = int(raw_mid)
+            continue
         emotion_match = EMOTION_DIRECTIVE.fullmatch(stripped)
         if emotion_match:
             emotion = emotion_match.group("emotion").strip().lower()
@@ -232,6 +244,8 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
         make_sticker=make_sticker,
         make_gif=make_gif,
         emotion=emotion,
+        singing_cover=singing_cover,
+        singing_cover_message_id=singing_cover_message_id,
     )
 
 

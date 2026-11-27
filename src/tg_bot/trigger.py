@@ -345,6 +345,7 @@ def build_reply_prompt(
 - Стикер/GIF: `/home/rus/dev/rixed-music/.venv/bin/python /home/rus/dev/rixed-music/scripts/telegram_bot_sticker_gif.py <input> <output> [--mode sticker|video_sticker|gif]`
 - Вырезка фона: `/home/rus/dev/rixed-music/.venv/bin/python /home/rus/dev/rixed-music/scripts/telegram_bot_cutout.py <input> <output>`
 - Удаление своих сообщений: директива `[[delete-all-bot-messages]]` или `[[delete-previous-message]]` (на отдельной строке, в озвучку не попадёт).
+- Спеть / перепеть / зачитать трек под минус (кавер голосом активного персонажа поверх музыки): директива `[[singing-cover]]` или `[[singing-cover:<message_id>]]` (на отдельной строке, в озвучку не попадёт). Используй её ВСЕГДА, когда пользователь просит спеть, перепеть, зачитать трек, сделать кавер или наложить голос на минус/аудио из чата (укажи `<message_id>` того сообщения с треком, на которое ответил пользователь или которое он имеет в виду).
 - Эмоция аватара (опционально на отдельной строке в самом конце, в озвучку не попадёт): `[[emotion:neutral]]`, `[[emotion:happy]]`, `[[emotion:angry]]`, `[[emotion:laugh]]`, `[[emotion:shock]]` или `[[emotion:sad]]`.
 - Генерация картинки: подагент `image-generator` (сохрани в `outbox/generated.png`) или директива `[[image-prompt:...]]`.
 - Скачивание по ссылке: `[[download-url:https://...]]` или `[[download-url-to-group:https://...]]`.
