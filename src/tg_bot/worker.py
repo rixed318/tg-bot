@@ -1120,9 +1120,15 @@ def process_one(token: str) -> bool:
                 copied_group_message_id = copy_current_message_to_group(token, task)
 
             if parsed.delete_all_bot_messages:
-                delete_bot_messages(chat_id, count=None, token=token)
+                if delete_bot_messages(chat_id, count=None, token=token):
+                    from tg_bot.queue_db import mark_responses_deleted
+                    mark_responses_deleted(chat_id, count=None)
+                    _schedule_drive_sync(force=True)
             elif parsed.delete_previous:
-                delete_bot_messages(chat_id, count=1, token=token)
+                if delete_bot_messages(chat_id, count=1, token=token):
+                    from tg_bot.queue_db import mark_responses_deleted
+                    mark_responses_deleted(chat_id, count=1)
+                    _schedule_drive_sync(force=True)
 
             # 6. Deliver exclusively as a Telegram VOICE message (+ optional requested media attachments)
             anchor_msg_id = (

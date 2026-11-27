@@ -291,6 +291,34 @@ def update_observation_text(
         )
 
 
+def mark_responses_deleted(
+    chat_id: int,
+    *,
+    count: int | None = None,
+    path: Path = DEFAULT_DATABASE,
+) -> None:
+    """Mark deleted bot replies as [[deleted]] so Drive sync and context exclude them."""
+    with connect(path) as database:
+        if count is None:
+            database.execute(
+                "update tasks set response='[[deleted]]' where chat_id=? and response is not null and response not in ('[[skip]]','[[muted]]','[[covered]]')",
+                (chat_id,),
+            )
+        else:
+            database.execute(
+                """
+                update tasks set response='[[deleted]]'
+                where id in (
+                    select id from tasks
+                    where chat_id=? and response is not null and response not in ('[[skip]]','[[muted]]','[[covered]]','[[deleted]]')
+                    order by id desc limit ?
+                )
+                """,
+                (chat_id, count),
+            )
+        database.commit()
+
+
 def enqueue(
     *,
     chat_id: int,
