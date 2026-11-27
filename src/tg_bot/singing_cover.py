@@ -22,7 +22,7 @@ from tg_bot.config import (
 LOGGER = logging.getLogger("tg_bot.singing_cover")
 
 SINGING_REQUEST = re.compile(
-    r"\b(спой|спеть|перепой|перепеть|кавер(?:ом|а|ы)?|под\s+бит)\b",
+    r"\b(спой|спеть|перепой|перепеть|зачитай|зачитать|исполни|исполнить|кавер(?:ом|а|ы)?|под\s+бит)\b",
     re.IGNORECASE,
 )
 

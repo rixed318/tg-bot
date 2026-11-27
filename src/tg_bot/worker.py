@@ -677,18 +677,41 @@ def process_one(token: str) -> bool:
             attachment = _transcribe_unanswered_audio(token, task, unanswered, work_dir)
             user_text = str(task.get("text") or "")
 
-            if (
-                attachment is not None
-                and attachment.suffix.lower() in AUDIO_SUFFIXES
-                and is_singing_cover_request(unanswered)
-            ):
+            cover_audio: Path | None = (
+                attachment
+                if attachment is not None and attachment.suffix.lower() in AUDIO_SUFFIXES
+                else None
+            )
+            if cover_audio is None and is_singing_cover_request(unanswered):
+                audio_markers = ("аудиотрек", "голосовое", "audio")
+                recent_audio_items = [
+                    item
+                    for item in [*unanswered, *(task.get("context") or [])]
+                    if item.get("photo_file_id")
+                    and any(m in str(item.get("text") or "").lower() for m in audio_markers)
+                ]
+                for item in reversed(recent_audio_items[-3:]):
+                    try:
+                        cand = download_telegram_file(
+                            token,
+                            str(item["photo_file_id"]),
+                            work_dir,
+                            f"cover-src-{item.get('message_id', 'x')}",
+                        )
+                        if cand.suffix.lower() in AUDIO_SUFFIXES:
+                            cover_audio = cand
+                            break
+                    except Exception:
+                        LOGGER.warning("Could not download recent audio for cover", exc_info=True)
+
+            if cover_audio is not None and is_singing_cover_request(unanswered):
                 anchor_message_id = max(
                     int(item.get("message_id") or 0) for item in unanswered
                 )
                 message_ids, singing_voice = _send_singing_cover_reply(
                     token,
                     task,
-                    attachment,
+                    cover_audio,
                     work_dir,
                     reply_to_message_id=anchor_message_id,
                 )
