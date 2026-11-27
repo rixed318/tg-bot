@@ -354,11 +354,14 @@ async def main() -> None:
                 )
             return
         elif action == "setvisual" and len(parts) > 2:
-            mode = parts[2] if parts[2] in ("quality", "street", "funny") else "quality"
+            mode = parts[2] if parts[2] in ("quality", "street", "cyber", "cozy", "buns", "funny") else "quality"
             set_bot_setting("speech_display", mode)
             labels = {
                 "quality": "Визуал: Обычный (2D)",
                 "street": "Визуал: Streetwear (2D)",
+                "cyber": "Визуал: Cyberpunk (2D)",
+                "cozy": "Визуал: Cozy (2D)",
+                "buns": "Визуал: Пучки (2D)",
                 "funny": "Визуал: Ржачный",
             }
             await callback.answer(labels[mode])
@@ -544,9 +547,12 @@ async def main() -> None:
             sub = parts[2]
             if sub == "visual":
                 visual_items = [
-                    ("quality", "✨ Обычный (2D пиксель-арт)"),
-                    ("street", "🧥 Streetwear (2D наряд)"),
-                    ("funny", "🤪 Ржачный (живое фото)"),
+                    ("quality", "✨ Обычный (2D)"),
+                    ("street", "🧥 Streetwear (2D)"),
+                    ("cyber", "🤖 Cyberpunk (2D)"),
+                    ("cozy", "🧶 Cozy (2D)"),
+                    ("buns", "🎀 Пучки (2D)"),
+                    ("funny", "🤪 Ржачный (фото)"),
                 ]
                 text, kb = _build_grid_panel(
                     "👗 <b>Выбери визуальный стиль аватара:</b>",
@@ -586,26 +592,25 @@ async def main() -> None:
                     else f"https://t.me/{me.username}?start=snake"
                 )
                 html5_btn = (
-                    InlineKeyboardButton(text="🐍 Змейка 60 FPS (HTML5)", web_app=WebAppInfo(url=arcade_url))
+                    InlineKeyboardButton(text="🎮 Открыть Аркаду (Змейка, 2048, Сапёр)", web_app=WebAppInfo(url=arcade_url))
                     if is_priv_chat
-                    else InlineKeyboardButton(text="🐍 Змейка 60 FPS (HTML5)", url=group_snake_url)
+                    else InlineKeyboardButton(text="🎮 Открыть Аркаду (Змейка, 2048, Сапёр)", url=group_snake_url)
                 )
                 text = (
                     "🎮 <b>Игры в чате</b>\n\n"
-                    "• <b>🐍 Змейка 60 FPS (HTML5)</b> — плавный Canvas, свайпы, частицы и авто-запись в рейтинг!\n"
-                    "• <b>💣 Сапёр 5×5</b> — открывай клетки без мин, +60 очков за победу.\n"
+                    "• <b>🎮 Аркада (HTML5)</b> — Змейка 60 FPS, 2048, Сапёр 6×6 и живой Топ в одном окне!\n"
                     "• <b>🕵️ Мафия</b> — лобби для компании (роли в ЛС + дневное голосование).\n"
                     "• <b>🎲 Кости</b> — быстрая дуэль с таблицей рекордов по ID и @username."
                 )
                 kb = InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [html5_btn, InlineKeyboardButton(text="💣 Сапёр", callback_data="cmd:game:mines:start")],
+                        [html5_btn],
                         [
                             InlineKeyboardButton(text="🕵️ Мафия", callback_data="cmd:game:mafia:menu"),
                             InlineKeyboardButton(text="🎲 Кости", callback_data="cmd:game:duel"),
                         ],
                         [
-                            InlineKeyboardButton(text="🏆 Рекорды", callback_data="cmd:game:top:dice_duel"),
+                            InlineKeyboardButton(text="🏆 Рекорды", callback_data="cmd:game:top:snake"),
                             InlineKeyboardButton(text="⬅️ Назад", callback_data="cmd:home"),
                         ],
                     ]
@@ -930,10 +935,19 @@ async def _start_arcade_server() -> web.AppRunner:
         stats = gmod.record_game_score(user_id=uid, username=uname, display_name=dname, game=game, points=score)
         return web.json_response({"ok": True, **stats})
 
+    async def handle_top(request: web.Request) -> web.Response:
+        game = str(request.query.get("game") or "snake")[:24]
+        try:
+            from tg_bot import games as gmod
+        except ImportError:
+            import joke_bot_games as gmod
+        return web.json_response({"ok": True, "rows": gmod.get_leaderboard(game, limit=10)})
+
     app = web.Application()
     app.router.add_get("/", handle_index)
     app.router.add_get("/index.html", handle_index)
     app.router.add_post("/api/score", handle_score)
+    app.router.add_get("/api/top", handle_top)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "127.0.0.1", int(os.environ.get("ARCADE_PORT", "8120")))
