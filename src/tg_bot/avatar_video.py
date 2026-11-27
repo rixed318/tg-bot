@@ -217,6 +217,22 @@ def _load_sprite_frames(
     return frames
 
 
+def _load_rig_hand(avatar_dir: Path, size: int = AVATAR_SIZE) -> Image.Image | None:
+    """Load optional transparent hand/prop overlay from _rigs/<base_char>/hand_wave.png."""
+    base_name = avatar_dir.name.split("_", 1)[0]
+    rig_dir = VOICES_DIR / "avatars" / "_rigs" / base_name
+    for fname in ("hand_mic.png", "hand_wave.png"):
+        path = rig_dir / fname
+        if path.is_file():
+            with Image.open(path) as im:
+                rgba = im.convert("RGBA")
+                target = max(96, size // 2)
+                if rgba.size != (target, target):
+                    rgba = rgba.resize((target, target), Image.Resampling.NEAREST)
+                return rgba
+    return None
+
+
 def compute_smoothed_envelope(
     audio_path: Path, *, fps: int = AVATAR_FPS
 ) -> tuple[list[float], list[str], float]:
@@ -320,6 +336,7 @@ def _apply_smooth_motion(
     emotion: str,
     camera: str = "auto",
     size: int,
+    hand_overlay: Image.Image | None = None,
 ) -> bytes:
     """Apply subtle breathing/speech nod plus optional camera pan/zoom without black edges."""
     emo_bounce = 1.2 if emotion in ("happy", "laugh") else (0.7 if emotion == "sad" else 1.0)
@@ -391,6 +408,10 @@ def _apply_smooth_motion(
         (a, b, c, d, e, f),
         resample=Image.Resampling.BILINEAR,
     )
+    if hand_overlay is not None and (emotion in ("happy", "laugh") or energy > 0.25):
+        hx = size - hand_overlay.width - 8
+        hy = int(size - hand_overlay.height + 10 - 10 * energy - 4 * math.sin(2.0 * math.pi * 0.9 * t_sec))
+        moved.paste(hand_overlay, (hx, hy), hand_overlay)
     return moved.tobytes()
 
 
@@ -408,6 +429,7 @@ def render_talking_avatar_mp4(
     """Render a talking avatar, optionally driving its mouth from an isolated vocal."""
     output_mp4.parent.mkdir(parents=True, exist_ok=True)
     sprites = _load_sprite_frames(avatar_dir, emotion, size=size)
+    hand_overlay = _load_rig_hand(avatar_dir, size=size)
     levels, states, duration = compute_smoothed_envelope(audio_path, fps=fps)
 
     cmd = [
@@ -488,6 +510,7 @@ def render_talking_avatar_mp4(
                 emotion=emotion,
                 camera=camera,
                 size=size,
+                hand_overlay=hand_overlay,
             )
             proc.stdin.write(raw_bytes)
         proc.stdin.close()

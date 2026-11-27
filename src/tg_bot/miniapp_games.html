@@ -8,40 +8,45 @@
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#090d14;color:#e6edf3;font:14px/1.35 system-ui;display:flex;flex-direction:column;align-items:center;padding:10px;user-select:none}
-.tabs{display:flex;gap:6px;margin-bottom:10px;width:312px;justify-content:space-between}
-.tabs button{flex:1;background:#161b22;border:1px solid #30363d;color:#8b949e;border-radius:10px;padding:8px 4px;font-weight:700;cursor:pointer;font-size:13px}
+.tabs{display:flex;gap:4px;margin-bottom:10px;width:320px}
+.tabs button{flex:1;background:#161b22;border:1px solid #30363d;color:#8b949e;border-radius:10px;padding:8px 2px;font-weight:700;cursor:pointer;font-size:15px}
 .tabs button.on{background:#238636;color:#fff;border-color:#2ea043}
-.view{display:none;flex-direction:column;align-items:center;width:312px}
+.view{display:none;flex-direction:column;align-items:center;width:320px}
 .view.on{display:flex}
 .bar{display:flex;gap:8px;align-items:center;margin-bottom:8px;width:100%;justify-content:space-between}
 .pill{background:#161b22;border:1px solid #30363d;border-radius:99px;padding:4px 12px;font-weight:700;color:#58a6ff}
 .btn{background:#238636;color:#fff;border:0;border-radius:9px;padding:7px 12px;font-weight:700;cursor:pointer}
 .btn.sec{background:#21262d;border:1px solid #30363d}
+.btn.red{background:#da3633}
 canvas{background:#0f1622;border:2px solid #238636;border-radius:12px;box-shadow:0 0 18px #23863633;touch-action:none}
 .pad{display:grid;grid-template-columns:repeat(3,58px);gap:6px;margin-top:8px}
 .pad button{background:#1c2432;color:#fff;padding:11px 0;font-size:18px;border:1px solid #30363d;border-radius:10px}
-.g2048{display:grid;grid-template-columns:repeat(4,68px);gap:6px;background:#161b22;padding:8px;border-radius:12px;border:2px solid #30363d;touch-action:none}
-.tile{width:68px;height:68px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;background:#21262d;color:#e6edf3}
-.mines{display:grid;grid-template-columns:repeat(6,44px);gap:4px;background:#161b22;padding:8px;border-radius:12px;border:2px solid #30363d}
-.cell{width:44px;height:44px;border-radius:7px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-weight:800;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.g2048{display:grid;grid-template-columns:repeat(4,70px);gap:6px;background:#161b22;padding:8px;border-radius:12px;border:2px solid #30363d;touch-action:none}
+.tile{width:70px;height:70px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;background:#21262d;color:#e6edf3}
+.mines{display:grid;grid-template-columns:repeat(6,45px);gap:4px;background:#161b22;padding:8px;border-radius:12px;border:2px solid #30363d}
+.cell{width:45px;height:45px;border-radius:7px;border:1px solid #30363d;background:#21262d;color:#e6edf3;font-weight:800;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .cell.open{background:#0d1117;border-color:#1f2937}
-.top-list{width:100%;background:#161b22;border:1px solid #30363d;border-radius:12px;padding:10px}
+.card{width:100%;background:#161b22;border:1px solid #30363d;border-radius:12px;padding:12px;text-align:center}
+.dice-row{display:flex;justify-content:space-around;font-size:36px;margin:14px 0}
+.mafia-list{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .top-row{display:flex;justify-content:space-between;padding:6px 4px;border-bottom:1px solid #21262d;font-size:13px}
 .top-row:last-child{border-bottom:0}
-.st{margin-top:6px;font-size:12px;color:#8b949e;min-height:16px}
+.st{margin-top:6px;font-size:12px;color:#8b949e;min-height:16px;text-align:center}
 </style>
 </head>
 <body>
 <div class="tabs">
-  <button class="on" onclick="tab('snake',this)">🐍 Змейка</button>
-  <button onclick="tab('g2048',this)">🔢 2048</button>
-  <button onclick="tab('mines',this)">💣 Сапёр</button>
-  <button onclick="tab('top',this)">🏆 Топ</button>
+  <button class="on" onclick="tab('snake',this)" title="Змейка">🐍</button>
+  <button onclick="tab('g2048',this)" title="2048">🔢</button>
+  <button onclick="tab('mines',this)" title="Сапёр">💣</button>
+  <button onclick="tab('dice',this)" title="Кости">🎲</button>
+  <button onclick="tab('mafia',this)" title="Мафия">🕵️</button>
+  <button onclick="tab('top',this)" title="Топ">🏆</button>
 </div>
 
 <!-- SNAKE -->
 <div id="v-snake" class="view on">
-  <div class="bar"><b>🐍 60 FPS</b><span class="pill" id="sn-sc">0</span><button class="btn" onclick="snInit()">Рестарт</button></div>
+  <div class="bar"><b>🐍 Змейка 60 FPS</b><span class="pill" id="sn-sc">0</span><button class="btn" onclick="snInit()">Рестарт</button></div>
   <canvas id="cv" width="296" height="296"></canvas>
   <div id="sn-st" class="st">Свайпай или жми стрелки</div>
   <div class="pad"><div></div><button onclick="snDir(0,-1)">⬆️</button><div></div><button onclick="snDir(-1,0)">⬅️</button><button onclick="snDir(0,1)">⬇️</button><button onclick="snDir(1,0)">➡️</button></div>
@@ -55,15 +60,37 @@ canvas{background:#0f1622;border:2px solid #238636;border-radius:12px;box-shadow
   <div class="pad"><div></div><button onclick="g2Move(0,-1)">⬆️</button><div></div><button onclick="g2Move(-1,0)">⬅️</button><button onclick="g2Move(0,1)">⬇️</button><button onclick="g2Move(1,0)">➡️</button></div>
 </div>
 
-<!-- MINESWEEPER 6x6 -->
+<!-- MINESWEEPER -->
 <div id="v-mines" class="view">
   <div class="bar">
     <b>💣 Сапёр 6×6</b>
-    <button class="btn sec" id="mn-flag-btn" onclick="mnToggleFlag()">🚩 Флаг: ВЫКЛ</button>
+    <button class="btn sec" id="mn-flag-btn" onclick="mnToggleFlag()">🚩 ВЫКЛ</button>
     <button class="btn" onclick="mnInit()">Новая</button>
   </div>
   <div id="mn-grid" class="mines"></div>
   <div id="mn-st" class="st">Мин: 6 | Открыто: 0/30</div>
+</div>
+
+<!-- DICE DUEL -->
+<div id="v-dice" class="view">
+  <div class="card">
+    <b>🎲 Дуэль на костях против Бота</b>
+    <div class="dice-row">
+      <div><div style="font-size:12px;color:#8b949e">Ты</div><span id="dc-you">🎲</span> <b id="dc-yp">-</b></div>
+      <div><div style="font-size:12px;color:#8b949e">Бот</div><span id="dc-bot">🤖</span> <b id="dc-bp">-</b></div>
+    </div>
+    <button class="btn" onclick="rollDice()">🎲 Бросить кости</button>
+    <div id="dc-st" class="st">Испытай удачу!</div>
+  </div>
+</div>
+
+<!-- MAFIA SOLO/PARTY -->
+<div id="v-mafia" class="view">
+  <div class="card">
+    <div class="bar"><b>🕵️ Мафия (Быстрая партия)</b><button class="btn" onclick="mfInit()">Новая</button></div>
+    <div id="mf-info" class="st" style="color:#e6edf3;font-size:13px"></div>
+    <div id="mf-list" class="mafia-list"></div>
+  </div>
 </div>
 
 <!-- LEADERBOARD -->
@@ -75,15 +102,16 @@ canvas{background:#0f1622;border:2px solid #238636;border-radius:12px;box-shadow
     <button class="btn sec" onclick="loadTop('dice_duel')">🎲</button>
     <button class="btn sec" onclick="loadTop('mafia')">🕵️</button>
   </div>
-  <div id="top-box" class="top-list">Загрузка...</div>
+  <div id="top-box" class="card" style="text-align:left">Загрузка...</div>
 </div>
 
 <script>
 const tg=window.Telegram?.WebApp,q=new URLSearchParams(location.search);
 if(tg){tg.ready();tg.expand()}
 const u=tg?.initDataUnsafe?.user||{id:q.get('uid')||0,username:q.get('uname')||'',first_name:q.get('dname')||'Player'};
-let curTab='snake';
+let curTab='snake',sentSnake=0,sent2048=0;
 function tab(name,btn){
+  flushScores();
   curTab=name;
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));
@@ -92,26 +120,33 @@ function tab(name,btn){
   if(name==='top')loadTop('snake');
 }
 function saveScore(game,score){
-  if(score<=0)return;
+  if(score<=0||!+u.id)return;
   fetch('/arcade/api/score',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({user_id:+u.id||0,username:u.username||'',display_name:u.first_name||'Player',game,score})
+    body:JSON.stringify({user_id:+u.id,username:u.username||'',display_name:u.first_name||'Player',game,score})
   }).catch(()=>{});
 }
+function flushScores(){
+  if(ssc>sentSnake){sentSnake=ssc;saveScore('snake',ssc)}
+  if(g2sc>sent2048){sent2048=g2sc;saveScore('g2048',g2sc)}
+}
+addEventListener('pagehide',flushScores);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flushScores()});
 
 /* --- SNAKE --- */
 const cv=document.getElementById('cv'),ctx=cv.getContext('2d'),SN_N=16,SN_S=296/SN_N;
-let sn,sd,snd,sap,spt=[],ssc,ssp,sls=0,sac=0,sdd=0,stx=0,sty=0;
+let sn,sd,snd,sap,spt=[],ssc=0,ssp,sls=0,sac=0,sdd=0,stx=0,sty=0;
 function snSpawn(){do{sap={x:Math.random()*SN_N|0,y:Math.random()*SN_N|0}}while(sn.some(p=>p.x==sap.x&&p.y==sap.y))}
-function snInit(){sn=[{x:8,y:8},{x:7,y:8},{x:6,y:8}];sd=snd={x:1,y:0};ssc=0;ssp=125;sdd=0;spt=[];snSpawn();snUpd('Поехали!')}
+function snInit(){flushScores();sn=[{x:8,y:8},{x:7,y:8},{x:6,y:8}];sd=snd={x:1,y:0};ssc=0;sentSnake=0;ssp=125;sdd=0;spt=[];snSpawn();snUpd('Поехали!')}
 function snDir(dx,dy){if(dx!==-sd.x||dy!==-sd.y)snd={x:dx,y:dy}}
 function snUpd(m){document.getElementById('sn-sc').textContent=ssc;if(m)document.getElementById('sn-st').textContent=m}
 function snTick(){
   sd=snd;const h={x:sn[0].x+sd.x,y:sn[0].y+sd.y};
-  if(h.x<0||h.y<0||h.x>=SN_N||h.y>=SN_N||sn.some(p=>p.x==h.x&&p.y==h.y)){sdd=1;snUpd('💀 Конец! Очки: '+ssc);saveScore('snake',ssc);return}
+  if(h.x<0||h.y<0||h.x>=SN_N||h.y>=SN_N||sn.some(p=>p.x==h.x&&p.y==h.y)){sdd=1;snUpd('💀 Конец! Очки: '+ssc);flushScores();return}
   sn.unshift(h);
   if(h.x==sap.x&&h.y==sap.y){
     ssc+=10;ssp=Math.max(62,ssp-2.5);
     for(let i=0;i<10;i++)spt.push({x:(sap.x+.5)*SN_S,y:(sap.y+.5)*SN_S,vx:(Math.random()-.5)*4,vy:(Math.random()-.5)*4,l:18});
+    if(ssc%50===0)flushScores();
     snUpd('🍎 +10!');snSpawn();
   }else sn.pop();
 }
@@ -132,17 +167,13 @@ cv.ontouchend=e=>{const dx=e.changedTouches[0].clientX-stx,dy=e.changedTouches[0
 let g2=[],g2sc=0,g2x=0,g2y=0;
 const g2Colors={0:'#21262d',2:'#2b3340',4:'#364152',8:'#d97706',16:'#ea580c',32:'#dc2626',64:'#b91c1c',128:'#ca8a04',256:'#16a34a',512:'#0d9488',1024:'#2563eb',2048:'#9333ea'};
 function g2Add(){const f=[];for(let r=0;r<4;r++)for(let c=0;c<4;c++)if(!g2[r][c])f.push([r,c]);if(f.length){const[r,c]=f[Math.random()*f.length|0];g2[r][c]=Math.random()<.9?2:4}}
-function g2Init(){g2=Array.from({length:4},()=>[0,0,0,0]);g2sc=0;g2Add();g2Add();g2Render();document.getElementById('g2-st').textContent='Свайпай плитки'}
+function g2Init(){flushScores();g2=Array.from({length:4},()=>[0,0,0,0]);g2sc=0;sent2048=0;g2Add();g2Add();g2Render();document.getElementById('g2-st').textContent='Свайпай плитки'}
 function g2Render(){
   document.getElementById('g2-sc').textContent=g2sc;
   const box=document.getElementById('g2-grid');box.innerHTML='';
   g2.flat().forEach(v=>{const d=document.createElement('div');d.className='tile';d.style.background=g2Colors[v]||'#7c3aed';d.textContent=v||'';box.appendChild(d)});
 }
-function g2Slide(row){
-  const a=row.filter(Boolean);let pts=0;
-  for(let i=0;i<a.length-1;i++){if(a[i]===a[i+1]){a[i]*=2;pts+=a[i];a.splice(i+1,1)}}
-  while(a.length<4)a.push(0);return[a,pts];
-}
+function g2Slide(row){const a=row.filter(Boolean);let pts=0;for(let i=0;i<a.length-1;i++){if(a[i]===a[i+1]){a[i]*=2;pts+=a[i];a.splice(i+1,1)}}while(a.length<4)a.push(0);return[a,pts]}
 function g2Move(dx,dy){
   let moved=false,pts=0;
   for(let i=0;i<4;i++){
@@ -150,37 +181,26 @@ function g2Move(dx,dy){
     const[nl,p]=g2Slide(line);pts+=p;
     for(let j=0;j<4;j++){const r=dy===0?i:(dy>0?3-j:j),c=dx===0?i:(dx>0?3-j:j);if(g2[r][c]!==nl[j]){g2[r][c]=nl[j];moved=true}}
   }
-  if(moved){g2sc+=pts;g2Add();g2Render();if(g2sc>0)saveScore('g2048',g2sc)}
+  if(moved){g2sc+=pts;g2Add();g2Render()}
 }
 const g2Box=document.getElementById('g2-grid');
 g2Box.ontouchstart=e=>{g2x=e.touches[0].clientX;g2y=e.touches[0].clientY};
 g2Box.ontouchend=e=>{const dx=e.changedTouches[0].clientX-g2x,dy=e.changedTouches[0].clientY-g2y;if(Math.abs(dx)>18||Math.abs(dy)>18)Math.abs(dx)>Math.abs(dy)?g2Move(dx>0?1:-1,0):g2Move(0,dy>0?1:-1)};
 
-/* --- MINESWEEPER 6x6 --- */
+/* --- MINESWEEPER --- */
 const MN_N=6,MN_M=6;
 let mnMines,mnOpen,mnFlags,mnFlagMode=false,mnDead=false;
-function mnToggleFlag(){mnFlagMode=!mnFlagMode;document.getElementById('mn-flag-btn').textContent='🚩 Флаг: '+(mnFlagMode?'ВКЛ':'ВЫКЛ')}
-function mnInit(){
-  mnMines=new Set();while(mnMines.size<MN_M)mnMines.add(Math.random()*MN_N*MN_N|0);
-  mnOpen=new Set();mnFlags=new Set();mnDead=false;mnRender('Мин: 6 | Открыто: 0/30');
-}
-function mnAdj(idx){
-  const r=idx/MN_N|0,c=idx%MN_N;let k=0;
-  for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const nr=r+dr,nc=c+dc;if((dr||dc)&&nr>=0&&nr<MN_N&&nc>=0&&nc<MN_N&&mnMines.has(nr*MN_N+nc))k++}
-  return k;
-}
+function mnToggleFlag(){mnFlagMode=!mnFlagMode;document.getElementById('mn-flag-btn').textContent='🚩 '+(mnFlagMode?'ВКЛ':'ВЫКЛ')}
+function mnInit(){mnMines=new Set();while(mnMines.size<MN_M)mnMines.add(Math.random()*MN_N*MN_N|0);mnOpen=new Set();mnFlags=new Set();mnDead=false;mnRender('Мин: 6 | Открыто: 0/30')}
+function mnAdj(idx){const r=idx/MN_N|0,c=idx%MN_N;let k=0;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const nr=r+dr,nc=c+dc;if((dr||dc)&&nr>=0&&nr<MN_N&&nc>=0&&nc<MN_N&&mnMines.has(nr*MN_N+nc))k++}return k}
 function mnTap(idx){
   if(mnDead)return;
   if(mnFlagMode){mnFlags.has(idx)?mnFlags.delete(idx):mnFlags.add(idx);mnRender();return}
   if(mnFlags.has(idx)||mnOpen.has(idx))return;
-  if(mnMines.has(idx)){mnDead=true;saveScore('mines',mnOpen.size*2);mnRender('💥 Бум! Очки: +'+(mnOpen.size*2));return}
+  if(mnMines.has(idx)){mnDead=true;saveScore('mines',mnOpen.size*2);mnRender('💥 Бум! +'+(mnOpen.size*2)+' очк.');return}
   const st=[idx];
-  while(st.length){
-    const cur=st.pop();if(mnOpen.has(cur)||mnMines.has(cur))continue;
-    mnOpen.add(cur);
-    if(mnAdj(cur)===0){const r=cur/MN_N|0,c=cur%MN_N;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const nr=r+dr,nc=c+dc;if(nr>=0&&nr<MN_N&&nc>=0&&nc<MN_N)st.push(nr*MN_N+nc)}}
-  }
-  if(mnOpen.size>=MN_N*MN_N-MN_M){mnDead=true;saveScore('mines',80);mnRender('🏆 Победа! +80 очков!')}
+  while(st.length){const cur=st.pop();if(mnOpen.has(cur)||mnMines.has(cur))continue;mnOpen.add(cur);if(mnAdj(cur)===0){const r=cur/MN_N|0,c=cur%MN_N;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const nr=r+dr,nc=c+dc;if(nr>=0&&nr<MN_N&&nc>=0&&nc<MN_N)st.push(nr*MN_N+nc)}}}
+  if(mnOpen.size>=MN_N*MN_N-MN_M){mnDead=true;saveScore('mines',80);mnRender('🏆 Победа! +80 очк.')}
   else mnRender(`Мин: ${MN_M} | Открыто: ${mnOpen.size}/${MN_N*MN_N-MN_M}`);
 }
 function mnRender(msg){
@@ -188,11 +208,47 @@ function mnRender(msg){
   const g=document.getElementById('mn-grid');g.innerHTML='';
   for(let i=0;i<MN_N*MN_N;i++){
     const b=document.createElement('button');b.className='cell'+(mnOpen.has(i)?' open':'');
-    if(mnDead&&mnMines.has(i))b.textContent='💥';
-    else if(mnOpen.has(i)){const k=mnAdj(i);b.textContent=k?k:''}
-    else if(mnFlags.has(i))b.textContent='🚩';
+    if(mnDead&&mnMines.has(i))b.textContent='💥';else if(mnOpen.has(i)){const k=mnAdj(i);b.textContent=k?k:''}else if(mnFlags.has(i))b.textContent='🚩';
     b.onclick=()=>mnTap(i);g.appendChild(b);
   }
+}
+
+/* --- DICE DUEL --- */
+function rollDice(){
+  const y=1+(Math.random()*100|0),b=1+(Math.random()*100|0);
+  document.getElementById('dc-yp').textContent=y;document.getElementById('dc-bp').textContent=b;
+  let pts=0,msg='';
+  if(y>b){pts=y;msg=`🏆 Победа! +${pts} очк.`}else if(y===b){pts=50;msg='🤝 Ничья! +50 очк.'}else{pts=Math.max(5,y>>2);msg=`💀 Бот перекинул! +${pts} очк.`}
+  document.getElementById('dc-st').textContent=msg;saveScore('dice_duel',pts);
+}
+
+/* --- MAFIA --- */
+let mfPlayers=[],mfOver=false;
+function mfInit(){
+  const names=['Аня','Канеки','Халдина','Серёжа','Ксюша','Артём'];
+  const mafIdx=Math.random()*names.length|0;
+  mfPlayers=names.map((n,i)=>({name:n,mafia:i===mafIdx,alive:true,clue:i===mafIdx?'нервно оглядывается':'спокойно спорит'}));
+  mfOver=false;mfRender('Ты — Шериф! Вычисли мафию среди 6 персонажей и выгони её.');
+}
+function mfVote(idx){
+  if(mfOver)return;
+  const p=mfPlayers[idx];p.alive=false;
+  if(p.mafia){mfOver=true;saveScore('mafia',100);mfRender(`🎉 ${p.name} была Мафией! Победа города (+100 очк.)`);return}
+  const alive=mfPlayers.filter(x=>x.alive&&!x.mafia);
+  if(alive.length<=1){mfOver=true;mfRender(`🔪 Мафия победила! Выбыли почти все мирные.`);return}
+  const victim=alive[Math.random()*alive.length|0];victim.alive=false;
+  mfRender(`❌ ${p.name} — мирный! Ночью мафия убрала ${victim.name}. Голосуй дальше!`);
+}
+function mfRender(msg){
+  document.getElementById('mf-info').textContent=msg;
+  const box=document.getElementById('mf-list');box.innerHTML='';
+  mfPlayers.forEach((p,i)=>{
+    const b=document.createElement('button');
+    b.className='btn '+(p.alive?(mfOver&&p.mafia?'red':'sec'):'sec');
+    b.disabled=!p.alive||mfOver;
+    b.textContent=p.alive?`⚖️ ${p.name} (${p.clue})`:`💀 ${p.name} — выбыл`;
+    b.onclick=()=>mfVote(i);box.appendChild(b);
+  });
 }
 
 /* --- LEADERBOARD --- */
@@ -209,7 +265,7 @@ onkeydown=e=>{
   if(!m)return;e.preventDefault();
   if(curTab==='snake')snDir(...m);else if(curTab==='g2048')g2Move(...m);
 };
-snInit();g2Init();mnInit();requestAnimationFrame(snDraw);
+snInit();g2Init();mnInit();mfInit();requestAnimationFrame(snDraw);
 </script>
 </body>
 </html>

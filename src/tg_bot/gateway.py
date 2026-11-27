@@ -592,25 +592,19 @@ async def main() -> None:
                     else f"https://t.me/{me.username}?start=snake"
                 )
                 html5_btn = (
-                    InlineKeyboardButton(text="🎮 Открыть Аркаду (Змейка, 2048, Сапёр)", web_app=WebAppInfo(url=arcade_url))
+                    InlineKeyboardButton(text="🎮 Открыть Аркаду (Все игры)", web_app=WebAppInfo(url=arcade_url))
                     if is_priv_chat
-                    else InlineKeyboardButton(text="🎮 Открыть Аркаду (Змейка, 2048, Сапёр)", url=group_snake_url)
+                    else InlineKeyboardButton(text="🎮 Открыть Аркаду (Все игры)", url=group_snake_url)
                 )
                 text = (
-                    "🎮 <b>Игры в чате</b>\n\n"
-                    "• <b>🎮 Аркада (HTML5)</b> — Змейка 60 FPS, 2048, Сапёр 6×6 и живой Топ в одном окне!\n"
-                    "• <b>🕵️ Мафия</b> — лобби для компании (роли в ЛС + дневное голосование).\n"
-                    "• <b>🎲 Кости</b> — быстрая дуэль с таблицей рекордов по ID и @username."
+                    "🎮 <b>Игры в чате (Всё в одном Mini App)</b>\n\n"
+                    "• <b>🐍 Змейка 60 FPS</b>, <b>🔢 2048</b>, <b>💣 Сапёр 6×6</b>, <b>🎲 Кости</b>, <b>🕵️ Мафия</b> и <b>🏆 Живой Топ</b> — всё работает плавно без лимитов кнопок!"
                 )
                 kb = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [html5_btn],
                         [
-                            InlineKeyboardButton(text="🕵️ Мафия", callback_data="cmd:game:mafia:menu"),
-                            InlineKeyboardButton(text="🎲 Кости", callback_data="cmd:game:duel"),
-                        ],
-                        [
-                            InlineKeyboardButton(text="🏆 Рекорды", callback_data="cmd:game:top:snake"),
+                            InlineKeyboardButton(text="🏆 Рекорды чата", callback_data="cmd:game:top:snake"),
                             InlineKeyboardButton(text="⬅️ Назад", callback_data="cmd:home"),
                         ],
                     ]
