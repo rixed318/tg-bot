@@ -1157,10 +1157,7 @@ async def _start_arcade_server() -> web.AppRunner:
         return web.Response(status=404)
 
     async def handle_get_visual(_request: web.Request) -> web.Response:
-        from tg_bot.queue_db import connect
-
-        with connect() as db:
-            rows = dict(db.execute("select key, value from settings").fetchall())
+        rows = get_bot_settings()
         crops: dict[str, dict[str, float]] = {}
         for k, v in rows.items():
             if k.startswith("avatar_crop_"):
