@@ -348,36 +348,36 @@ def _apply_smooth_motion(
     cam_dy = 0.0
     cam_zoom = 0.0
     if cam in ("pan_left", "left"):
-        cam_dx = 12.0 * (1.0 - 2.0 * ease)
-        cam_zoom = 0.065
+        cam_dx = 22.0 * (1.0 - 2.0 * ease)
+        cam_zoom = 0.13
     elif cam in ("pan_right", "right"):
-        cam_dx = -12.0 * (1.0 - 2.0 * ease)
-        cam_zoom = 0.065
+        cam_dx = -22.0 * (1.0 - 2.0 * ease)
+        cam_zoom = 0.13
     elif cam in ("pan_up", "up"):
-        cam_dy = 12.0 * (1.0 - 2.0 * ease)
-        cam_zoom = 0.065
+        cam_dy = 22.0 * (1.0 - 2.0 * ease)
+        cam_zoom = 0.13
     elif cam in ("pan_down", "down"):
-        cam_dy = -12.0 * (1.0 - 2.0 * ease)
-        cam_zoom = 0.065
+        cam_dy = -22.0 * (1.0 - 2.0 * ease)
+        cam_zoom = 0.13
     elif cam in ("zoom_in", "in"):
-        cam_zoom = 0.12 * ease
+        cam_zoom = 0.16 * ease
     elif cam in ("zoom_out", "out"):
-        cam_zoom = 0.12 * (1.0 - ease)
+        cam_zoom = 0.16 * (1.0 - ease)
     elif cam == "shake":
-        cam_dx = 4.5 * math.sin(2.0 * math.pi * 3.5 * t_sec) * (0.4 + 0.6 * energy)
-        cam_dy = 3.5 * math.cos(2.0 * math.pi * 2.8 * t_sec) * (0.4 + 0.6 * energy)
-        cam_zoom = 0.05
+        cam_dx = 6.0 * math.sin(2.0 * math.pi * 3.5 * t_sec) * (0.4 + 0.6 * energy)
+        cam_dy = 5.0 * math.cos(2.0 * math.pi * 2.8 * t_sec) * (0.4 + 0.6 * energy)
+        cam_zoom = 0.08
 
     angle_deg = 0.0
     if cam in ("tilt_left", "nod_left"):
-        angle_deg = -3.2 * ease
-        cam_zoom = max(cam_zoom, 0.07)
+        angle_deg = -4.5 * ease
+        cam_zoom = max(cam_zoom, 0.10)
     elif cam in ("tilt_right", "nod_right"):
-        angle_deg = 3.2 * ease
-        cam_zoom = max(cam_zoom, 0.07)
+        angle_deg = 4.5 * ease
+        cam_zoom = max(cam_zoom, 0.10)
     elif cam == "nod":
-        cam_dy = 7.0 * math.sin(2.0 * math.pi * 2.0 * progress)
-        cam_zoom = max(cam_zoom, 0.06)
+        cam_dy = 9.0 * math.sin(2.0 * math.pi * 2.0 * progress)
+        cam_zoom = max(cam_zoom, 0.08)
     elif emotion in ("happy", "laugh"):
         angle_deg = 1.4 * math.sin(2.0 * math.pi * 0.55 * t_sec) * (0.35 + 0.65 * energy)
     else:
@@ -408,10 +408,6 @@ def _apply_smooth_motion(
         (a, b, c, d, e, f),
         resample=Image.Resampling.BILINEAR,
     )
-    if hand_overlay is not None and (emotion in ("happy", "laugh") or energy > 0.25):
-        hx = size - hand_overlay.width - 8
-        hy = int(size - hand_overlay.height + 10 - 10 * energy - 4 * math.sin(2.0 * math.pi * 0.9 * t_sec))
-        moved.paste(hand_overlay, (hx, hy), hand_overlay)
     return moved.tobytes()
 
 
