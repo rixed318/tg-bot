@@ -351,18 +351,38 @@ def _apply_smooth_motion(
         cam_dy = 3.5 * math.cos(2.0 * math.pi * 2.8 * t_sec) * (0.4 + 0.6 * energy)
         cam_zoom = 0.05
 
-    scale = 1.015 + cam_zoom + 0.004 * math.sin(2.0 * math.pi * 0.35 * t_sec) + 0.008 * energy * emo_bounce
+    angle_deg = 0.0
+    if cam in ("tilt_left", "nod_left"):
+        angle_deg = -3.2 * ease
+        cam_zoom = max(cam_zoom, 0.07)
+    elif cam in ("tilt_right", "nod_right"):
+        angle_deg = 3.2 * ease
+        cam_zoom = max(cam_zoom, 0.07)
+    elif cam == "nod":
+        cam_dy = 7.0 * math.sin(2.0 * math.pi * 2.0 * progress)
+        cam_zoom = max(cam_zoom, 0.06)
+    elif emotion in ("happy", "laugh"):
+        angle_deg = 1.4 * math.sin(2.0 * math.pi * 0.55 * t_sec) * (0.35 + 0.65 * energy)
+    else:
+        angle_deg = 0.8 * math.sin(2.0 * math.pi * 0.4 * t_sec) * energy
+
+    scale = 1.03 + cam_zoom + 0.004 * math.sin(2.0 * math.pi * 0.35 * t_sec) + 0.008 * energy * emo_bounce
     dy = cam_dy - 1.6 * energy * emo_bounce
 
     cx = size * 0.5
     cy = size * 0.5
     inv_scale = 1.0 / scale
-    a = inv_scale
-    b = 0.0
-    c = cx - inv_scale * (cx + cam_dx)
-    d = 0.0
-    e = inv_scale
-    f = cy - inv_scale * (cy + dy)
+    rad = math.radians(angle_deg)
+    cos_a = math.cos(rad) * inv_scale
+    sin_a = math.sin(rad) * inv_scale
+    tx = cx + cam_dx
+    ty = cy + dy
+    a = cos_a
+    b = -sin_a
+    c = cx - (a * tx + b * ty)
+    d = sin_a
+    e = cos_a
+    f = cy - (d * tx + e * ty)
 
     pil_img = Image.fromarray(frame, mode="RGB")
     moved = pil_img.transform(

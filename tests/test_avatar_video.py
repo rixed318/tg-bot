@@ -91,3 +91,9 @@ def test_resolve_avatar_dir_uses_funny_variant_when_requested(
     assert quality == quality_dir
     assert funny == funny_dir
     assert street == street_dir
+
+
+def test_miniapp_html_under_4kb() -> None:
+    html_path = Path(__file__).resolve().parents[1] / "src" / "tg_bot" / "miniapp_games.html"
+    assert html_path.is_file()
+    assert html_path.stat().st_size < 4096

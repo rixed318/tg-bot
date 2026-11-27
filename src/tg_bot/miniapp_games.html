@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Rixed 4KB Arcade</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+body{margin:0;background:#0d1117;color:#e6edf3;font:14px/1.3 system-ui;display:flex;flex-direction:column;align-items:center;padding:10px}
+.bar{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+button{background:#238636;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer}
+canvas{background:#161b22;border:2px solid #30363d;border-radius:10px;touch-action:none}
+.pad{display:grid;grid-template-columns:repeat(3,52px);gap:6px;margin-top:10px}
+.pad button{background:#21262d;padding:12px 0;font-size:16px}
+</style>
+<div class="bar"><b>🐍 Змейка</b><span id="sc">Очки: 0</span><button onclick="init()">Рестарт</button></div>
+<canvas id="c" width="280" height="280"></canvas>
+<div class="pad">
+<div></div><button onclick="dir(0,-1)">⬆️</button><div></div>
+<button onclick="dir(-1,0)">⬅️</button><button onclick="dir(0,1)">⬇️</button><button onclick="dir(1,0)">➡️</button>
+</div>
+<script>
+const tg=window.Telegram?.WebApp;if(tg){tg.ready();tg.expand();}
+const cv=document.getElementById('c'),ctx=cv.getContext('2d'),N=14,S=20;
+let sn,d,nd,ap,sc,tm;
+function spawn(){do{ap={x:Math.random()*N|0,y:Math.random()*N|0}}while(sn.some(p=>p.x==ap.x&&p.y==ap.y))}
+function init(){sn=[{x:7,y:7},{x:6,y:7}];d=nd={x:1,y:0};sc=0;spawn();upd();clearInterval(tm);tm=setInterval(step,140)}
+function dir(x,y){if(x!==-d.x||y!==-d.y)nd={x,y}}
+function upd(){document.getElementById('sc').textContent='Очки: '+sc}
+function step(){
+  d=nd;const h={x:sn[0].x+d.x,y:sn[0].y+d.y};
+  if(h.x<0||h.y<0||h.x>=N||h.y>=N||sn.some(p=>p.x==h.x&&p.y==h.y)){
+    clearInterval(tm);if(tg&&sc>0)tg.sendData(JSON.stringify({game:'snake',score:sc}));return;
+  }
+  sn.unshift(h);
+  if(h.x==ap.x&&h.y==ap.y){sc+=10;upd();spawn()}else sn.pop();
+  ctx.fillStyle='#161b22';ctx.fillRect(0,0,280,280);
+  ctx.fillStyle='#f85149';ctx.fillRect(ap.x*S+2,ap.y*S+2,S-4,S-4);
+  sn.forEach((p,i)=>{ctx.fillStyle=i?'#2ea043':'#56d364';ctx.fillRect(p.x*S+1,p.y*S+1,S-2,S-2)});
+}
+addEventListener('keydown',e=>{const m={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]}[e.key];if(m)dir(...m)});
+init();
+</script>
+</html>

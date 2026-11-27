@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.enums import ChatMemberStatus, ChatType, MessageEntityType
@@ -13,6 +14,7 @@ from aiogram.filters import Command
 from aiogram.types import (
     BotCommand,
     CallbackQuery,
+    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
@@ -301,6 +303,52 @@ async def main() -> None:
             enabled = parts[2] == "1"
             set_bot_setting("use_userbot", "1" if enabled else "0")
             await callback.answer("Отправка: Telegram Premium" if enabled else "Отправка: Бот")
+        elif action == "delmsg":
+            await callback.answer()
+            if callback.message:
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass
+            return
+        elif action == "previewvisual":
+            settings = get_bot_settings()
+            persona = settings.get("persona", "default")
+            mode = settings.get("speech_display", "quality")
+            roots = [
+                Path("/opt/rixed-joke-bot/avatars_preview"),
+                Path(__file__).resolve().parents[2] / "voices" / "avatars",
+            ]
+            preview_path: Path | None = None
+            names = [persona] if persona and persona != "default" else ["anya", "default"]
+            for root in roots:
+                for nm in names:
+                    if mode not in ("quality", "default", "normal"):
+                        cand = root / f"{nm}_{mode}" / "neutral_closed.png"
+                        if cand.is_file():
+                            preview_path = cand
+                            break
+                    cand = root / nm / "neutral_closed.png"
+                    if cand.is_file():
+                        preview_path = cand
+                        break
+                if preview_path:
+                    break
+            if not preview_path:
+                await callback.answer("Превью для этого образа пока нет", show_alert=True)
+                return
+            await callback.answer("Отправляю превью...")
+            if callback.message:
+                hide_kb = InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(text="🗑 Скрыть превью", callback_data="cmd:delmsg")]]
+                )
+                await callback.message.answer_photo(
+                    FSInputFile(preview_path),
+                    caption=f"👀 <b>Превью образа:</b> {persona} ({mode})",
+                    parse_mode="HTML",
+                    reply_markup=hide_kb,
+                )
+            return
         elif action == "setvisual" and len(parts) > 2:
             mode = parts[2] if parts[2] in ("quality", "street", "funny") else "quality"
             set_bot_setting("speech_display", mode)
@@ -310,6 +358,8 @@ async def main() -> None:
                 "funny": "Визуал: Ржачный",
             }
             await callback.answer(labels[mode])
+            action = "menu"
+            parts = ["cmd", "menu", "visual"]
         elif action == "setvoice" and len(parts) > 2:
             cid = parts[2]
             set_bot_setting("voice_profile", cid)
@@ -466,6 +516,10 @@ async def main() -> None:
                     visual_items,
                     settings.get("speech_display", "quality"),
                     "cmd:setvisual",
+                )
+                kb.inline_keyboard.insert(
+                    -1,
+                    [InlineKeyboardButton(text="👀 Показать превью образа", callback_data="cmd:previewvisual")],
                 )
             elif sub == "voice":
                 text, kb = _build_grid_panel(
