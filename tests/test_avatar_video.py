@@ -97,3 +97,21 @@ def test_miniapp_html_under_4kb() -> None:
     html_path = Path(__file__).resolve().parents[1] / "src" / "tg_bot" / "miniapp_4kb_snake.html"
     assert html_path.is_file()
     assert html_path.stat().st_size < 4096
+
+
+def test_apply_smooth_motion_respects_manual_crop_without_swaying() -> None:
+    import numpy as np
+
+    frame = np.full((64, 64, 3), 20, dtype=np.uint8)
+    frame[28:36, 28:36] = (200, 120, 80)
+    out = avatar_video._apply_smooth_motion(
+        frame,
+        t_sec=1.2,
+        duration=3.0,
+        energy=0.8,
+        emotion="happy",
+        camera="auto",
+        size=64,
+        crop={"scale": 1.5, "x": 0.0, "y": 0.0},
+    )
+    assert len(out) == 64 * 64 * 3

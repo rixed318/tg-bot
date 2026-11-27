@@ -265,9 +265,11 @@ def compute_smoothed_envelope(
     prev = 0.0
     for rms in rms_values:
         norm = max(0.0, min(1.0, (rms - noise_floor) / max(1e-5, ref_peak - noise_floor)))
-        alpha = 0.58 if norm >= prev else 0.32
+        if norm < 0.08:
+            norm = 0.0
+        alpha = 0.44 if norm >= prev else 0.38
         cur = prev + alpha * (norm - prev)
-        smoothed.append(cur)
+        smoothed.append(0.0 if cur < 0.05 else cur)
         prev = cur
 
     states: list[str] = []
@@ -337,11 +339,15 @@ def _apply_smooth_motion(
     camera: str = "auto",
     size: int,
     hand_overlay: Image.Image | None = None,
+    crop: dict[str, float] | None = None,
 ) -> bytes:
-    """Apply subtle breathing/speech nod plus optional camera pan/zoom without black edges."""
-    emo_bounce = 1.2 if emotion in ("happy", "laugh") else (0.7 if emotion == "sad" else 1.0)
+    """Apply manual circle crop/zoom plus optional explicit camera motion without unwanted swaying."""
     progress = min(1.0, max(0.0, t_sec / max(0.5, duration)))
     ease = 0.5 - 0.5 * math.cos(math.pi * progress)
+
+    crop_scale = max(0.75, min(2.2, float((crop or {}).get("scale") or 1.0)))
+    crop_dx = max(-0.45, min(0.45, float((crop or {}).get("x") or 0.0))) * size
+    crop_dy = max(-0.45, min(0.45, float((crop or {}).get("y") or 0.0))) * size
 
     cam = (camera or "auto").strip().lower()
     cam_dx = 0.0
@@ -378,21 +384,18 @@ def _apply_smooth_motion(
     elif cam == "nod":
         cam_dy = 9.0 * math.sin(2.0 * math.pi * 2.0 * progress)
         cam_zoom = max(cam_zoom, 0.08)
-    elif emotion in ("happy", "laugh"):
-        angle_deg = 1.4 * math.sin(2.0 * math.pi * 0.55 * t_sec) * (0.35 + 0.65 * energy)
-    else:
-        angle_deg = 0.8 * math.sin(2.0 * math.pi * 0.4 * t_sec) * energy
 
-    scale = 1.03 + cam_zoom + 0.004 * math.sin(2.0 * math.pi * 0.35 * t_sec) + 0.008 * energy * emo_bounce
-    dy = cam_dy - 1.6 * energy * emo_bounce
+    scale = crop_scale + cam_zoom
+    dx = crop_dx + cam_dx
+    dy = crop_dy + cam_dy
 
     cx = size * 0.5
     cy = size * 0.5
-    inv_scale = 1.0 / scale
+    inv_scale = 1.0 / max(0.1, scale)
     rad = math.radians(angle_deg)
     cos_a = math.cos(rad) * inv_scale
     sin_a = math.sin(rad) * inv_scale
-    tx = cx + cam_dx
+    tx = cx + dx
     ty = cy + dy
     a = cos_a
     b = -sin_a
@@ -401,12 +404,14 @@ def _apply_smooth_motion(
     e = cos_a
     f = cy - (d * tx + e * ty)
 
+    bg_fill = tuple(int(v) for v in frame[0, 0])
     pil_img = Image.fromarray(frame, mode="RGB")
     moved = pil_img.transform(
         (size, size),
         Image.Transform.AFFINE,
         (a, b, c, d, e, f),
         resample=Image.Resampling.BILINEAR,
+        fillcolor=bg_fill,
     )
     return moved.tobytes()
 
@@ -421,6 +426,7 @@ def render_talking_avatar_mp4(
     camera: str = "auto",
     size: int = AVATAR_SIZE,
     fps: int = AVATAR_FPS,
+    crop: dict[str, float] | None = None,
 ) -> tuple[Path, int]:
     """Render a talking avatar, optionally driving its mouth from an isolated vocal."""
     output_mp4.parent.mkdir(parents=True, exist_ok=True)
@@ -507,6 +513,7 @@ def render_talking_avatar_mp4(
                 camera=camera,
                 size=size,
                 hand_overlay=hand_overlay,
+                crop=crop,
             )
             proc.stdin.write(raw_bytes)
         proc.stdin.close()

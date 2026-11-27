@@ -427,6 +427,20 @@ def _send_voice_reply(
                 persona_name=persona_name,
                 speech_display=speech_display,
             )
+            crop_cfg: dict[str, float] | None = None
+            crop_key = f"avatar_crop_{persona_name or voice_res.voice_name}"
+            raw_crop = bot_settings.get(crop_key)
+            if raw_crop:
+                try:
+                    parsed_crop = json.loads(str(raw_crop))
+                    if isinstance(parsed_crop, dict):
+                        crop_cfg = {
+                            "scale": float(parsed_crop.get("scale", 1.0)),
+                            "x": float(parsed_crop.get("x", 0.0)),
+                            "y": float(parsed_crop.get("y", 0.0)),
+                        }
+                except Exception:
+                    crop_cfg = None
             mp4_path = work_dir / f"avatar_{task['id']}.mp4"
             rendered_mp4, vid_dur = render_talking_avatar_mp4(
                 voice_res.ogg_path,
@@ -434,6 +448,7 @@ def _send_voice_reply(
                 avatar_dir=avatar_dir,
                 emotion=emotion,
                 camera=camera,
+                crop=crop_cfg,
             )
             mid = send_video_note(
                 token,

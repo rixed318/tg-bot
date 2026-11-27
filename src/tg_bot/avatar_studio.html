@@ -1,104 +1,143 @@
-<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<title>Rixed Avatar Studio</title>
-<script async src="https://telegram.org/js/telegram-web-app.js"></script>
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Avatar Studio</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-*{box-sizing:border-box}
-body{margin:0;background:#090d14;color:#e6edf3;font:14px/1.35 system-ui;display:flex;flex-direction:column;align-items:center;padding:12px;user-select:none}
-.wrap{width:332px;display:flex;flex-direction:column;gap:10px}
-.head{display:flex;justify-content:space-between;align-items:center}
-.badge{background:#1f2937;border:1px solid #374151;border-radius:99px;padding:3px 10px;font-size:12px;color:#93c5fd}
-.preview{background:#111827;border:2px solid #30363d;border-radius:16px;padding:12px;display:flex;flex-direction:column;align-items:center;gap:8px}
-.preview img{width:200px;height:200px;border-radius:14px;image-rendering:pixelated;background:#090d14;border:1px solid #30363d}
-.cats{display:flex;gap:4px;overflow-x:auto;padding-bottom:2px}
-.cats button{flex:0 0 auto;padding:7px 10px;font-size:12px}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
-button{background:#161b22;border:1px solid #30363d;color:#e6edf3;border-radius:10px;padding:8px 8px;font-weight:600;cursor:pointer;font-size:12.5px}
-button.on{background:#1f6feb;border-color:#58a6ff;color:#fff}
-.apply{background:#238636;border-color:#2ea043;color:#fff;padding:11px;font-size:14.5px;width:100%}
-.shop{background:#161b22;border:1px dashed #30363d;border-radius:12px;padding:10px;font-size:12px;color:#9ca3af}
-#st{font-size:12px;color:#7ee787;text-align:center;min-height:16px}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="head"><b>🎨 Avatar Studio</b><span class="badge">Магазин · Бета</span></div>
-  <div class="preview">
-    <img id="img" src="" alt="preview">
-    <b id="title">Ксюша · Обычный</b>
-    <div id="params" style="font-size:11.5px;color:#9ca3af"></div>
-    <button class="apply" onclick="applyLook()">✨ Применить образ в боте</button>
-    <div id="st">Выбери категории внешности ниже</div>
+:root{--bg:#0d0e15;--card:#171926;--ac:#7c5cff;--tx:#f4f5fa;--mut:#8b90a8;--ok:#2ecc71}
+*{box-sizing:border-box;margin:0;padding:0;font-family:Inter,system-ui,sans-serif}
+body{background:var(--bg);color:var(--tx);padding:14px 14px 86px}
+.hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.hdr h1{font-size:18px;font-weight:700}.badge{font-size:11px;background:#25283d;color:#b8bfff;padding:4px 9px;border-radius:99px}
+.preview{background:radial-gradient(circle at top,#242742,#131420);border-radius:18px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:14px;border:1px solid #26293d}
+.circle-frame{position:relative;width:184px;height:184px;border-radius:50%;overflow:hidden;border:3px solid var(--ac);background:#1b1e2e;box-shadow:0 0 24px rgba(124,92,255,.35);cursor:grab;touch-action:none;user-select:none}
+.circle-frame:active{cursor:grabbing}
+.circle-frame img{width:100%;height:100%;object-fit:cover;transform-origin:center center;pointer-events:none;display:block}
+.circle-guide{position:absolute;inset:12%;border:1px dashed rgba(255,255,255,.22);border-radius:50%;pointer-events:none}
+.pname{font-weight:700;font-size:16px}.ptraits{font-size:12px;color:var(--mut);text-align:center}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:10px;scrollbar-width:none}
+.tab{flex:0 0 auto;background:var(--card);border:1px solid #26293d;color:var(--mut);padding:7px 12px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer}
+.tab.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.item{background:var(--card);border:2px solid #26293d;border-radius:12px;padding:10px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.item.on{border-color:var(--ac);background:#1f2136}
+.sw{width:22px;height:22px;border-radius:50%;border:1px solid #fff3;flex:none}
+.ilbl{font-size:13px;font-weight:600;line-height:1.2}
+.crop-box{background:var(--card);border:1px solid #26293d;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.sl-row{display:flex;align-items:center;gap:10px;font-size:13px}
+.sl-row label{width:76px;color:var(--mut);font-weight:600}
+.sl-row input[type=range]{flex:1;accent-color:var(--ac)}
+.sl-val{width:46px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.btn-reset{background:#25283d;color:#cfd4ec;border:none;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;align-self:flex-start}
+.bar{position:fixed;left:0;right:0;bottom:0;background:rgba(13,14,21,.95);backdrop-filter:blur(10px);padding:12px 14px;border-top:1px solid #26293d}
+.btn{width:100%;background:linear-gradient(135deg,#7c5cff,#5a3dff);color:#fff;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:700;cursor:pointer}
+.btn.ok{background:var(--ok)}
+</style></head><body>
+<div class="hdr"><h1>✨ Avatar Studio</h1><span class="badge">Кружок · Кастомизация</span></div>
+<div class="preview">
+  <div class="circle-frame" id="cframe" title="Перетаскивай, чтобы отцентрировать лицо в кружочке">
+    <img id="pimg" src="/arcade/avatar/ksyusha/neutral_closed.png" alt="preview">
+    <div class="circle-guide"></div>
   </div>
-
-  <div class="cats" id="cats"></div>
-  <div class="grid" id="opts"></div>
-
-  <div class="shop">
-    <b>🛍 Магазин аватаров и голосов (скоро)</b><br>
-    • Кастомное туловище, рост, вес и кожа<br>
-    • Обучение твоего голоса (<code>F5-TTS</code>) на заказ<br>
-    • Паки одежды, причёсок и аксессуаров
-  </div>
+  <div class="pname" id="pname">Ксюша</div>
+  <div class="ptraits" id="ptraits">Обычный образ · Кадр 100%</div>
 </div>
+<div class="tabs">
+  <button class="tab on" data-t="crop">🎯 Кадр кружочка</button>
+  <button class="tab" data-t="char">👤 Персонаж</button>
+  <button class="tab" data-t="torso">👗 Туловище</button>
+  <button class="tab" data-t="hair">💇 Причёска</button>
+  <button class="tab" data-t="acc">🧢 Аксессуары</button>
+  <button class="tab" data-t="skin">🎨 Кожа</button>
+  <button class="tab" data-t="body">📏 Рост/Вес</button>
+</div>
+<div id="panel"></div>
+<div class="bar"><button class="btn" id="save">Сохранить и применить</button></div>
 <script>
-const tg=window.Telegram?.WebApp;if(tg){tg.ready();tg.expand()}
-const CATS=[
-  ['char','👤 Персонаж'],
-  ['torso','👗 Туловище'],
-  ['hair','💇 Причёска'],
-  ['acc','🧢 Аксессуары'],
-  ['skin','🎨 Кожа'],
-  ['body','📏 Рост/Вес'],
-];
+const tg=window.Telegram&&window.Telegram.WebApp;if(tg){tg.ready();tg.expand();}
 const DATA={
   char:[['ksyusha','Ксюша'],['anya','Аня'],['ruslan','Руслан'],['kaneki','Канеки'],['haldina','Халдина'],['serezha','Серёжа'],['artem','Артём'],['katya','Катя'],['karina','Карина'],['nikita','Никита']],
-  torso:[['quality','✨ Базовое'],['street','🧥 Streetwear'],['cyber','🤖 Cyberpunk'],['cozy','🧶 Cozy свитер'],['beach','🏖 Купальник'],['funny','🤪 Ржачный']],
-  hair:[['base','💇 Базовая'],['buns','🎀 Пучки (2D)']],
-  acc:[['none','➖ Без аксессуаров'],['panama','🧢 Панама + очки'],['headphones','🎧 Наушники']],
-  skin:[['fair','🤍 Светлая'],['warm','🍑 Тёплая'],['tan','☀️ Загар'],['pale','🌙 Бледная']],
-  body:[['slim_160','160см · Стройная'],['avg_170','170см · Средняя'],['fit_175','175см · Спортивная'],['tall_185','185см · Высокий']],
+  torso:[['quality','Обычный (базовый)'],['beach','Пляжный (купальник)'],['cozy','Уютный домашний'],['cyber','Кибер-костюм'],['street','Уличный стиль'],['funny','Мемный лук']],
+  hair:[['base','Фирменная'],['buns','Два пучка'],['long','Длинные волны'],['bob','Короткое каре']],
+  acc:[['none','Без аксессуаров'],['panama','Панама'],['glasses','Тёмные очки'],['headphones','Наушники']],
+  skin:[['fair','Светлая','#fde0c8'],['warm','Тёплая персиковая','#f1c29b'],['tan','Загорелая','#d99b66'],['dark','Смуглая','#8d5524']],
+  body:[['petite_160','160 см · Хрупкая'],['slim_165','165 см · Стройная'],['avg_170','170 см · Средняя'],['fit_178','178 см · Атлет'],['tall_185','185 см · Крупный']]
 };
-let tab='char',sel={char:'ksyusha',torso:'quality',hair:'base',acc:'none',skin:'fair',body:'avg_170'};
-
-function activeFolder(){
-  if(sel.acc==='panama') return `${sel.char}_panama`;
-  if(sel.hair==='buns') return `${sel.char}_buns`;
-  return sel.torso==='quality'?sel.char:`${sel.char}_${sel.torso}`;
-}
-function activeMode(){
-  if(sel.acc==='panama') return 'panama';
-  if(sel.hair==='buns') return 'buns';
-  return sel.torso;
+let tab='crop',sel={char:'ksyusha',torso:'quality',hair:'base',acc:'none',skin:'fair',body:'avg_170'};
+let crops={};
+function getCrop(){return crops[sel.char]||(crops[sel.char]={scale:1.0,x:0.0,y:0.0});}
+function applyPreview(){
+  const c=getCrop(),pimg=document.getElementById('pimg');
+  const folder=sel.acc==='panama'?sel.char+'_panama':(sel.hair==='buns'?sel.char+'_buns':(sel.torso!=='quality'?sel.char+'_'+sel.torso:sel.char));
+  pimg.onerror=()=>{pimg.onerror=null;pimg.src='/arcade/avatar/'+sel.char+'/neutral_closed.png';};
+  pimg.src='/arcade/avatar/'+folder+'/neutral_closed.png';
+  pimg.style.transform=`translate(${(c.x*100).toFixed(1)}%, ${(c.y*100).toFixed(1)}%) scale(${c.scale.toFixed(2)})`;
+  const ch=DATA.char.find(x=>x[0]===sel.char),tr=DATA.torso.find(x=>x[0]===sel.torso);
+  document.getElementById('pname').textContent=ch?ch[1]:sel.char;
+  document.getElementById('ptraits').textContent=`${tr?tr[1]:''} · Масштаб ${Math.round(c.scale*100)}% (X:${c.x.toFixed(2)} Y:${c.y.toFixed(2)})`;
 }
 function render(){
-  const cBox=document.getElementById('cats'),oBox=document.getElementById('opts');
-  cBox.innerHTML='';oBox.innerHTML='';
-  CATS.forEach(([id,nm])=>{const b=document.createElement('button');b.className=id===tab?'on':'';b.textContent=nm;b.onclick=()=>{tab=id;render()};cBox.appendChild(b)});
-  DATA[tab].forEach(([id,nm])=>{const b=document.createElement('button');b.className=sel[tab]===id?'on':'';b.textContent=nm;b.onclick=()=>{sel[tab]=id;render()};oBox.appendChild(b)});
-  const img=document.getElementById('img'),folder=activeFolder();
-  img.src=`/arcade/avatar/${folder}/neutral_closed.png`;
-  img.onerror=()=>{img.src=`/arcade/avatar/${sel.char}/neutral_closed.png`};
-  const find=(k)=>DATA[k].find(x=>x[0]===sel[k])[1];
-  document.getElementById('title').textContent=`${find('char')} · ${find('torso')}`;
-  document.getElementById('params').textContent=`${find('hair')} | ${find('acc')} | ${find('skin')} | ${find('body')}`;
+  applyPreview();
+  const panel=document.getElementById('panel');
+  if(tab==='crop'){
+    const c=getCrop();
+    panel.innerHTML=`<div class="crop-box">
+      <div style="font-size:12px;color:#b8bfff">Перетаскивай кружочек пальцем/мышкой или крути ползунки — выбранная область будет 1-в-1 в кружочках Telegram.</div>
+      <div class="sl-row"><label>Масштаб</label><input id="sl_s" type="range" min="0.75" max="2.2" step="0.02" value="${c.scale}"><span class="sl-val" id="v_s">${Math.round(c.scale*100)}%</span></div>
+      <div class="sl-row"><label>Сдвиг X</label><input id="sl_x" type="range" min="-0.45" max="0.45" step="0.01" value="${c.x}"><span class="sl-val" id="v_x">${c.x.toFixed(2)}</span></div>
+      <div class="sl-row"><label>Сдвиг Y</label><input id="sl_y" type="range" min="-0.45" max="0.45" step="0.01" value="${c.y}"><span class="sl-val" id="v_y">${c.y.toFixed(2)}</span></div>
+      <button class="btn-reset" id="rst_crop">↺ Сбросить кадр</button>
+    </div>`;
+    const upd=()=>{
+      c.scale=parseFloat(document.getElementById('sl_s').value);
+      c.x=parseFloat(document.getElementById('sl_x').value);
+      c.y=parseFloat(document.getElementById('sl_y').value);
+      document.getElementById('v_s').textContent=Math.round(c.scale*100)+'%';
+      document.getElementById('v_x').textContent=c.x.toFixed(2);
+      document.getElementById('v_y').textContent=c.y.toFixed(2);
+      applyPreview();
+    };
+    ['sl_s','sl_x','sl_y'].forEach(id=>document.getElementById(id).oninput=upd);
+    document.getElementById('rst_crop').onclick=()=>{c.scale=1.0;c.x=0.0;c.y=0.0;render();};
+    return;
+  }
+  panel.innerHTML='<div class="grid"></div>';
+  const g=panel.firstChild;
+  (DATA[tab]||[]).forEach(([id,lbl,col])=>{
+    const d=document.createElement('div');
+    d.className='item'+(sel[tab]===id?' on':'');
+    d.innerHTML=(col?`<span class="sw" style="background:${col}"></span>`:'')+`<span class="ilbl">${lbl}</span>`;
+    d.onclick=()=>{sel[tab]=id;render();};
+    g.appendChild(d);
+  });
 }
-function applyLook(){
-  const st=document.getElementById('st');st.textContent='Сохраняю...';
-  fetch('/arcade/api/set_visual',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      persona:sel.char,speech_display:activeMode(),
-      avatar_hair:sel.hair,avatar_accessory:sel.acc,avatar_skin:sel.skin,
-      avatar_height:sel.body,avatar_build:sel.body,
-    })
-  }).then(r=>r.json()).then(d=>{st.textContent=d.ok?'✅ Образ сохранён в боте!':'❌ Ошибка'})
-    .catch(()=>{st.textContent='❌ Ошибка сети'});
-}
+const cf=document.getElementById('cframe');
+let drag=null;
+cf.addEventListener('pointerdown',e=>{const c=getCrop();drag={px:e.clientX,py:e.clientY,ox:c.x,oy:c.y};cf.setPointerCapture(e.pointerId);});
+cf.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  const c=getCrop();
+  c.x=Math.max(-0.45,Math.min(0.45,drag.ox+(e.clientX-drag.px)/184));
+  c.y=Math.max(-0.45,Math.min(0.45,drag.oy+(e.clientY-drag.py)/184));
+  applyPreview();
+  const sx=document.getElementById('sl_x'),sy=document.getElementById('sl_y');
+  if(sx&&sy){sx.value=c.x;sy.value=c.y;document.getElementById('v_x').textContent=c.x.toFixed(2);document.getElementById('v_y').textContent=c.y.toFixed(2);}
+});
+cf.addEventListener('pointerup',()=>{drag=null;});
+cf.addEventListener('pointercancel',()=>{drag=null;});
+
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));b.classList.add('on');tab=b.dataset.t;render();});
+document.getElementById('save').onclick=async()=>{
+  const btn=document.getElementById('save');btn.textContent='Сохраняю...';
+  const [h,bd]=sel.body.split('_');
+  const disp=sel.acc==='panama'?'panama':(sel.hair==='buns'?'buns':sel.torso);
+  await fetch('/arcade/api/set_visual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({persona:sel.char,speech_display:disp,avatar_hair:sel.hair,avatar_accessory:sel.acc,avatar_skin:sel.skin,avatar_height:bd||'170',avatar_build:h||'avg',crop:getCrop()})});
+  btn.textContent='✅ Сохранено!';btn.classList.add('ok');setTimeout(()=>{btn.textContent='Сохранить и применить';btn.classList.remove('ok');},1600);
+};
+fetch('/arcade/api/get_visual').then(r=>r.json()).then(d=>{
+  if(d&&d.ok){
+    if(d.persona)sel.char=d.persona;
+    if(d.crops)crops=d.crops;
+    render();
+  }
+}).catch(()=>render());
 render();
-</script>
-</body>
-</html>
+</script></body></html>

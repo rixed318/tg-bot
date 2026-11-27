@@ -1156,6 +1156,39 @@ async def _start_arcade_server() -> web.AppRunner:
                 return web.Response(body=cand.read_bytes(), content_type="image/png")
         return web.Response(status=404)
 
+    async def handle_get_visual(_request: web.Request) -> web.Response:
+        from tg_bot.queue_db import connect
+
+        with connect() as db:
+            rows = dict(db.execute("select key, value from settings").fetchall())
+        crops: dict[str, dict[str, float]] = {}
+        for k, v in rows.items():
+            if k.startswith("avatar_crop_"):
+                pname = k[len("avatar_crop_") :]
+                try:
+                    obj = json.loads(v)
+                    if isinstance(obj, dict):
+                        crops[pname] = {
+                            "scale": float(obj.get("scale", 1.0)),
+                            "x": float(obj.get("x", 0.0)),
+                            "y": float(obj.get("y", 0.0)),
+                        }
+                except Exception:
+                    pass
+        return web.json_response(
+            {
+                "ok": True,
+                "persona": rows.get("persona", "ksyusha"),
+                "speech_display": rows.get("speech_display", "quality"),
+                "avatar_hair": rows.get("avatar_hair", "base"),
+                "avatar_accessory": rows.get("avatar_accessory", "none"),
+                "avatar_skin": rows.get("avatar_skin", "fair"),
+                "avatar_height": rows.get("avatar_height", "h165"),
+                "avatar_build": rows.get("avatar_build", "slim"),
+                "crops": crops,
+            }
+        )
+
     async def handle_set_visual(request: web.Request) -> web.Response:
         try:
             data = await request.json()
@@ -1171,6 +1204,14 @@ async def _start_arcade_server() -> web.AppRunner:
             val = str(data.get(key) or "").strip()
             if val:
                 set_bot_setting(key, val[:40])
+        crop = data.get("crop")
+        if persona and isinstance(crop, dict):
+            clean_crop = {
+                "scale": round(max(0.75, min(2.2, float(crop.get("scale", 1.0)))), 3),
+                "x": round(max(-0.45, min(0.45, float(crop.get("x", 0.0)))), 3),
+                "y": round(max(-0.45, min(0.45, float(crop.get("y", 0.0)))), 3),
+            }
+            set_bot_setting(f"avatar_crop_{persona[:32]}", json.dumps(clean_crop))
         return web.json_response({"ok": True})
 
     app = web.Application()
@@ -1181,6 +1222,7 @@ async def _start_arcade_server() -> web.AppRunner:
     app.router.add_get("/ext/{slug}/{tail:.*}", handle_ext_game)
     app.router.add_post("/api/score", handle_score)
     app.router.add_get("/api/top", handle_top)
+    app.router.add_get("/api/get_visual", handle_get_visual)
     app.router.add_post("/api/set_visual", handle_set_visual)
     runner = web.AppRunner(app)
     await runner.setup()
