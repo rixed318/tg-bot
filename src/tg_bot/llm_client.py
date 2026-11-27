@@ -15,18 +15,38 @@ _META_PREAMBLE_RE = re.compile(
     r"(?:(?:сначала|для\s+начала|сейчас|щас|пойду|давай|надо|нужно|попробую|могу|давайте)\s+)?"
     r"(?:(?:тихо|быстро|быстренько|молча|коротко|внимательно|аккуратно|просто|ещё|еще)\s+)*"
     r"(?:гляну|посмотрю|проверю|проверюсь|сверюсь|открою|прочитаю|изучу|поищу|чекну|уточню|вспомню|освежу|загляну|пробегусь|пролистаю|выясню|узнаю|прослушаю"
-    r"|ищу|смотрю|проверяю|читаю|изучаю|сверяюсь|заглядываю|открываю|пробую|слушаю)"
+    r"|ищу|смотрю|проверяю|читаю|изучаю|сверяюсь|заглядываю|открываю|пробую|слушаю"
+    r"|генерирую|рисую|делаю|собираю|соберу|склею|склеиваю|копирую|прогоню|подбираю|выбираю|беру|меняю|исправляю|переделываю|запускаю)"
     r"(?:[,:\s]+[^.!?\n]*)?[.!?\n]+"
     r"|(?:i['’]?ll|let me|first,? i['’]?ll)\s+(?:check|read|look at|inspect)\s+[^.!?\n]*[.!?\n]+"
     r")\s*",
     flags=re.IGNORECASE,
 )
 
+_META_PARAGRAPH_HINT_RE = re.compile(
+    r"(?:"
+    r"^(?:генерирую|рисую|собираю|соберу|склею|склеиваю|копирую|прогоню|проверю|гляну|сверюсь|посмотрю|ищу)\b"
+    r"|кадр\s+(?:готов|с\s+\S+\s+не\s+прошёл|не\s+прошёл)"
+    r"|ролик\s+(?:подозрительно|готов)"
+    r"|монтаж\s+схлопнулся"
+    r"|копирую\s+в\s+исходящие"
+    r"|\boutbox\b"
+    r")",
+    flags=re.IGNORECASE,
+)
+
 
 def strip_meta_thoughts(text: str) -> str:
-    """Strip accidental model pre-tool 'thinking aloud' preambles before the spoken reply."""
+    """Strip accidental model pre-tool 'thinking aloud' preambles and progress narration."""
     cleaned = text.strip()
-    for _ in range(3):
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n+", cleaned) if p.strip()]
+    if len(paragraphs) > 1:
+        kept_start = 0
+        while kept_start < len(paragraphs) - 1 and _META_PARAGRAPH_HINT_RE.search(paragraphs[kept_start]):
+            kept_start += 1
+        if kept_start > 0:
+            cleaned = "\n\n".join(paragraphs[kept_start:]).strip()
+    for _ in range(4):
         updated = _META_PREAMBLE_RE.sub("", cleaned, count=1).strip()
         if not updated or updated == cleaned:
             break

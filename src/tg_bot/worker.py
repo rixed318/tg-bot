@@ -1022,9 +1022,25 @@ def process_one(token: str) -> bool:
             if (parsed.make_sticker or parsed.make_emoji or parsed.cutout_photo) and not any(
                 "sticker" in p.name.lower() or p.suffix.lower() in (".webp", ".webm") for p in downloaded_files
             ):
+                import hashlib
+
                 sticker_sources: list[Path] = []
+                seen_hashes: set[str] = set()
+
+                def _add_sticker_src(p: Path) -> None:
+                    if not p.is_file() or p.suffix.lower() not in (PHOTO_SUFFIXES | VIDEO_SUFFIXES):
+                        return
+                    try:
+                        digest = hashlib.sha256(p.read_bytes()).hexdigest()
+                    except Exception:
+                        digest = str(p)
+                    if digest in seen_hashes:
+                        return
+                    seen_hashes.add(digest)
+                    sticker_sources.append(p)
+
                 if attachment is not None:
-                    sticker_sources.append(attachment)
+                    _add_sticker_src(attachment)
                 seen_fids: set[str] = {str(task.get("photo_file_id") or "")}
                 for u_idx, u_item in enumerate(unanswered):
                     fid = str(u_item.get("photo_file_id") or "")
@@ -1036,14 +1052,17 @@ def process_one(token: str) -> bool:
                     seen_fids.add(fid)
                     try:
                         dl = download_telegram_file(token, fid, work_dir, f"sticker-src-{u_idx}")
-                        if dl.suffix.lower() in (PHOTO_SUFFIXES | VIDEO_SUFFIXES):
-                            sticker_sources.append(dl)
+                        _add_sticker_src(dl)
                     except Exception:
                         LOGGER.warning("Could not download batch sticker photo %s", u_idx)
                     if len(sticker_sources) >= 10:
                         break
-                if not sticker_sources and context_attachments:
-                    sticker_sources.append(context_attachments[0])
+                is_pack_request = bool(parsed.sticker_pack_title or parsed.emoji_pack_title)
+                if context_attachments and (not sticker_sources or (is_pack_request and len(sticker_sources) < 10)):
+                    for ctx_p in context_attachments:
+                        _add_sticker_src(ctx_p)
+                        if len(sticker_sources) >= 10:
+                            break
 
                 created_stickers: list[Path] = []
                 for s_idx, source_media in enumerate(sticker_sources, start=1):
@@ -1090,7 +1109,7 @@ def process_one(token: str) -> bool:
                         parsed = type(parsed)(
                             **{
                                 **parsed.__dict__,
-                                "text": f"{parsed.text}\n\n📦 <a href=\"{pack_url}\">{pack_title}</a> ({len(created_stickers)} шт.)".strip(),
+                                "text": f"📦 <a href=\"{pack_url}\">{pack_title}</a> ({len(created_stickers)} шт.)",
                                 "rich_text": True,
                             }
                         )

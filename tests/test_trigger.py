@@ -127,3 +127,18 @@ def test_explicit_call_does_not_merge_unrelated_prior_request(tmp_path: Path) ->
     )
     assert decision.should_reply is True
     assert decision.target_message_ids == (8753, 8754)
+
+
+def test_strip_meta_thoughts_removes_grok_progress_paragraphs() -> None:
+    from tg_bot.llm_client import strip_meta_thoughts
+
+    raw = (
+        "Генерирую кадр Ксюши, потом сразу склею ролик.\n\n"
+        "Кадр с кроватью не прошёл, беру вечерний гламур.\n\n"
+        "Кадр готов — копирую в исходящие и собираю ролик.\n\n"
+        "Ролик подозрительно лёгкий — проверю, что монтаж реально собрался.\n\n"
+        "Монтаж схлопнулся в один кадр — сначала сделаю нормальный ролик из фото.\n\n"
+        "Соберу из фото восьмисекундный ролик с наездом, потом прогоню через монтаж.\n\n"
+        "Рус, лови меня в чёрном платье на крыше — фото и видео, как заказывал."
+    )
+    assert strip_meta_thoughts(raw) == "Рус, лови меня в чёрном платье на крыше — фото и видео, как заказывал."
