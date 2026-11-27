@@ -1045,6 +1045,7 @@ def process_one(token: str) -> bool:
                 if not sticker_sources and context_attachments:
                     sticker_sources.append(context_attachments[0])
 
+                created_stickers: list[Path] = []
                 for s_idx, source_media in enumerate(sticker_sources, start=1):
                     is_vid = source_media.suffix.lower() in VIDEO_SUFFIXES
                     prefix = "emoji" if parsed.make_emoji else "sticker"
@@ -1067,12 +1068,36 @@ def process_one(token: str) -> bool:
                                 margin=6 if parsed.make_emoji else 20,
                             )
                         if out_sticker.is_file():
-                            downloaded_files = (*downloaded_files, out_sticker)
+                            created_stickers.append(out_sticker)
                             archive_on_drive(
                                 out_sticker, task, category="stickers", stable_key=f"{prefix}:{task_id}:{s_idx}"
                             )
                     except Exception:
                         LOGGER.exception("Sticker/emoji creation failed for task %s item %s", task_id, s_idx)
+
+                pack_title = parsed.emoji_pack_title or parsed.sticker_pack_title
+                if pack_title and created_stickers:
+                    try:
+                        from tg_bot.telegram_api import create_sticker_set
+                        pack_url = create_sticker_set(
+                            token,
+                            user_id=int(task["sender_id"]),
+                            title=pack_title,
+                            sticker_paths=created_stickers,
+                            is_emoji=bool(parsed.emoji_pack_title),
+                        )
+                        parsed = type(parsed)(
+                            **{
+                                **parsed.__dict__,
+                                "text": f"{parsed.text}\n\n📦 <a href=\"{pack_url}\">{pack_title}</a> ({len(created_stickers)} шт.)".strip(),
+                                "rich_text": True,
+                            }
+                        )
+                    except Exception:
+                        LOGGER.exception("create_sticker_set failed for task %s", task_id)
+                        downloaded_files = (*downloaded_files, *created_stickers)
+                else:
+                    downloaded_files = (*downloaded_files, *created_stickers)
 
             if parsed.make_gif and not any(
                 "anim" in p.name.lower() or p.suffix.lower() == ".gif" for p in downloaded_files

@@ -59,3 +59,15 @@ def test_parses_camera_and_clean_sticker(tmp_path: Path) -> None:
     with Image.open(out) as st:
         assert st.size == (512, 512)
         assert st.format == "WEBP"
+
+
+def test_parse_sticker_and_emoji_pack_directives(tmp_path: Path) -> None:
+    p1 = parse_agent_response("Готов твой пак!\n[[sticker-pack:Ксюша и друзья]]", tmp_path)
+    assert p1.make_sticker is True
+    assert p1.make_emoji is False
+    assert p1.sticker_pack_title == "Ксюша и друзья"
+
+    p2 = parse_agent_response("Вот эмодзи!\n[[emoji-pack:Мини эмодзи]]", tmp_path)
+    assert p2.make_sticker is True
+    assert p2.make_emoji is True
+    assert p2.emoji_pack_title == "Мини эмодзи"

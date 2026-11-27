@@ -52,6 +52,8 @@ STICKER_DIRECTIVE = re.compile(
 EMOJI_DIRECTIVE = re.compile(
     r"^\[\[(?:make-)?emoji(?::(?P<range>\d{1,2}:\d{2}-\d{1,2}:\d{2}|\d+(?:\.\d+)?-\d+(?:\.\d+)?))?\]\]$"
 )
+STICKER_PACK_DIRECTIVE = re.compile(r"^\[\[sticker-pack:(?P<title>.+)\]\]$")
+EMOJI_PACK_DIRECTIVE = re.compile(r"^\[\[emoji-pack:(?P<title>.+)\]\]$")
 GIF_DIRECTIVE = re.compile(r"^\[\[(?:make-)?gif\]\]$")
 EMOTION_DIRECTIVE = re.compile(r"^\[\[emotion:(?P<emotion>[a-zA-Z_-]+)\]\]$")
 SINGING_COVER_DIRECTIVE = re.compile(r"^\[\[singing-cover(?::(?P<mid>\d+))?\]\]$")
@@ -116,6 +118,8 @@ class AgentResponse:
     singing_cover_message_id: int | None = None
     rich_text: bool = False
     camera: str = "auto"
+    sticker_pack_title: str | None = None
+    emoji_pack_title: str | None = None
 
 
 def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
@@ -143,6 +147,8 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
     singing_cover_message_id: int | None = None
     rich_text = False
     camera = "auto"
+    sticker_pack_title: str | None = None
+    emoji_pack_title: str | None = None
 
     for line in response.splitlines():
         stripped = line.strip()
@@ -169,6 +175,17 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
             continue
         if DELETE_PREVIOUS_DIRECTIVE.fullmatch(stripped):
             delete_previous = True
+            continue
+        sp_match = STICKER_PACK_DIRECTIVE.fullmatch(stripped)
+        if sp_match:
+            sticker_pack_title = sp_match.group("title").strip()[:64]
+            make_sticker = True
+            continue
+        ep_match = EMOJI_PACK_DIRECTIVE.fullmatch(stripped)
+        if ep_match:
+            emoji_pack_title = ep_match.group("title").strip()[:64]
+            make_sticker = True
+            make_emoji = True
             continue
         st_match = STICKER_DIRECTIVE.fullmatch(stripped)
         if st_match:
@@ -282,6 +299,8 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
         singing_cover_message_id=singing_cover_message_id,
         rich_text=rich_text,
         camera=camera,
+        sticker_pack_title=sticker_pack_title,
+        emoji_pack_title=emoji_pack_title,
     )
 
 

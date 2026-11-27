@@ -298,3 +298,81 @@ def copy_current_message_to_group(token: str, task: dict[str, Any]) -> int:
         mid = int(json.load(response)["result"]["message_id"])
         record_bot_message(target, mid, int(task.get("id") or 0))
         return mid
+
+
+_BOT_USERNAME_CACHE: dict[str, str] = {}
+
+
+def get_bot_username(token: str) -> str:
+    if token in _BOT_USERNAME_CACHE:
+        return _BOT_USERNAME_CACHE[token]
+    with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/getMe", timeout=20) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+    if not payload.get("ok"):
+        raise RuntimeError(f"Telegram getMe failed: {payload}")
+    uname = str(payload["result"]["username"]).strip()
+    _BOT_USERNAME_CACHE[token] = uname
+    return uname
+
+
+def create_sticker_set(
+    token: str,
+    *,
+    user_id: int,
+    title: str,
+    sticker_paths: list[Path],
+    is_emoji: bool = False,
+    emoji: str = "✨",
+) -> str:
+    """Create a new Telegram sticker or custom emoji set and return its t.me/addstickers/ URL."""
+    if not sticker_paths:
+        raise ValueError("No stickers provided for sticker set")
+    bot_uname = get_bot_username(token)
+    suffix = f"_by_{bot_uname}"
+    stem = f"pack_{user_id}_{int(time.time()) % 1000000}"
+    name = f"{stem[: 64 - len(suffix)]}{suffix}"
+
+    boundary = f"----TgBotPack{secrets.token_hex(12)}"
+    body = bytearray()
+
+    def _add_field(k: str, v: str) -> None:
+        body.extend(f"--{boundary}\r\n".encode())
+        body.extend(f'Content-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode("utf-8"))
+
+    stickers_spec = []
+    batch = sticker_paths[:50]
+    for idx, path in enumerate(batch):
+        fmt = "video" if path.suffix.lower() == ".webm" else "static"
+        stickers_spec.append(
+            {"sticker": f"attach://s{idx}", "format": fmt, "emoji_list": [emoji]}
+        )
+
+    _add_field("user_id", str(user_id))
+    _add_field("name", name)
+    _add_field("title", title[:64] or "Sticker Pack")
+    _add_field("stickers", json.dumps(stickers_spec, ensure_ascii=False))
+    if is_emoji:
+        _add_field("sticker_type", "custom_emoji")
+
+    for idx, path in enumerate(batch):
+        ctype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        body.extend(f"--{boundary}\r\n".encode())
+        body.extend(
+            f'Content-Disposition: form-data; name="s{idx}"; filename="{path.name}"\r\n'
+            f"Content-Type: {ctype}\r\n\r\n".encode("utf-8")
+        )
+        body.extend(path.read_bytes())
+        body.extend(b"\r\n")
+
+    body.extend(f"--{boundary}--\r\n".encode())
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/createNewStickerSet",
+        data=bytes(body),
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+    if not payload.get("ok"):
+        raise RuntimeError(f"createNewStickerSet failed: {payload}")
+    return f"https://t.me/addstickers/{name}"
