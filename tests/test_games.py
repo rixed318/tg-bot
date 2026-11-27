@@ -10,7 +10,9 @@ from tg_bot.games import (
     mafia_vote,
     play_dice_duel_round,
     record_game_score,
+    start_mines_game,
     start_snake_game,
+    step_mines_game,
     step_snake_game,
 )
 
@@ -53,3 +55,15 @@ def test_mafia_lobby_start_and_vote(tmp_path: Path) -> None:
     assert "Дневное голосование" in group_html
     res, _ = mafia_vote(10, 1, 2, db_path=db)
     assert "Проголосовало" in res or "Победа" in res
+
+
+def test_minesweeper_session(tmp_path: Path) -> None:
+    db = tmp_path / "games.db"
+    txt, grid, active = start_mines_game(chat_id=5, user_id=99, db_path=db)
+    assert active is True
+    assert len(grid) == 5 and len(grid[0]) == 5
+    txt2, grid2, _ = step_mines_game(
+        chat_id=5, user_id=99, username="rus", display_name="Rus", row=0, col=0, db_path=db
+    )
+    assert "Сапёр" in txt2 or "Бум" in txt2 or "Поле" in txt2
+    assert len(grid2) == 5

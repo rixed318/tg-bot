@@ -61,6 +61,17 @@ def _connect(db_path: Path = DEFAULT_GAMES_DB) -> sqlite3.Connection:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS mines_sessions (
+            chat_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            state_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (chat_id, user_id)
+        )
+        """
+    )
     conn.commit()
     return conn
 
@@ -158,7 +169,7 @@ def play_dice_duel_round(
 
 
 def format_leaderboard_html(game: str = "dice_duel", *, db_path: Path = DEFAULT_GAMES_DB) -> str:
-    titles = {"dice_duel": "🎲 Кости", "snake": "🐍 Змейка", "mafia": "🕵️ Мафия"}
+    titles = {"dice_duel": "🎲 Кости", "snake": "🐍 Змейка", "mafia": "🕵️ Мафия", "mines": "💣 Сапёр"}
     title = titles.get(game, game)
     rows = get_leaderboard(game, db_path=db_path)
     if not rows:
@@ -506,3 +517,160 @@ def mafia_vote(chat_id: int, voter_id: int, target_id: int, *, db_path: Path = D
         f"⚖️ Город изгнал <b>{_player_label(lynched)}</b>, но мафия ещё среди вас!\n\n"
         + mafia_status_html(chat_id, db_path=db_path)
     ), False
+
+
+# ---------------------------------------------------------------------------
+# Interactive Minesweeper (5x5 inline grid, 4 mines)
+# ---------------------------------------------------------------------------
+
+MINES_SIZE = 5
+MINES_COUNT = 4
+
+
+def _mines_adj(mines: set[tuple[int, int]], r: int, c: int) -> int:
+    return sum(
+        1
+        for dr in (-1, 0, 1)
+        for dc in (-1, 0, 1)
+        if (dr or dc) and (r + dr, c + dc) in mines
+    )
+
+
+def _render_mines_grid(state: dict[str, Any]) -> list[list[str]]:
+    mines = {tuple(m) for m in state["mines"]}
+    opened = {tuple(o) for o in state["opened"]}
+    alive = state.get("alive", True)
+    won = state.get("won", False)
+    nums = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣"]
+    grid: list[list[str]] = []
+    for r in range(MINES_SIZE):
+        row: list[str] = []
+        for c in range(MINES_SIZE):
+            if (r, c) in mines and not alive:
+                row.append("💥")
+            elif (r, c) in mines and won:
+                row.append("🚩")
+            elif (r, c) in opened:
+                cnt = _mines_adj(mines, r, c)
+                row.append("🟦" if cnt == 0 else nums[cnt])
+            else:
+                row.append("⬜")
+        grid.append(row)
+    return grid
+
+
+def start_mines_game(
+    *,
+    chat_id: int,
+    user_id: int,
+    db_path: Path = DEFAULT_GAMES_DB,
+) -> tuple[str, list[list[str]], bool]:
+    cells = [[r, c] for r in range(MINES_SIZE) for c in range(MINES_SIZE)]
+    mines = random.sample(cells, MINES_COUNT)
+    state = {"mines": mines, "opened": [], "alive": True, "won": False}
+    with _connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO mines_sessions (chat_id, user_id, state_json, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(chat_id, user_id) DO UPDATE SET
+                state_json=excluded.state_json,
+                updated_at=CURRENT_TIMESTAMP
+            """,
+            (chat_id, user_id, json.dumps(state)),
+        )
+        conn.commit()
+    return (
+        f"💣 <b>Сапёр 5×5</b> | Мин: <b>{MINES_COUNT}</b> | Открыто: <b>0/{MINES_SIZE*MINES_SIZE - MINES_COUNT}</b>",
+        _render_mines_grid(state),
+        True,
+    )
+
+
+def step_mines_game(
+    *,
+    chat_id: int,
+    user_id: int,
+    username: str,
+    display_name: str,
+    row: int,
+    col: int,
+    db_path: Path = DEFAULT_GAMES_DB,
+) -> tuple[str, list[list[str]], bool]:
+    with _connect(db_path) as conn:
+        rec = conn.execute(
+            "SELECT state_json FROM mines_sessions WHERE chat_id=? AND user_id=?",
+            (chat_id, user_id),
+        ).fetchone()
+    if not rec:
+        return start_mines_game(chat_id=chat_id, user_id=user_id, db_path=db_path)
+    state = json.loads(rec["state_json"])
+    if not state.get("alive", True) or state.get("won", False):
+        return (
+            "💣 <b>Сапёр 5×5</b> — партия завершена, жми «🔄 Новая игра».",
+            _render_mines_grid(state),
+            False,
+        )
+
+    mines = {tuple(m) for m in state["mines"]}
+    opened = {tuple(o) for o in state["opened"]}
+    target = (row, col)
+    if target in mines:
+        state["alive"] = False
+        pts = len(opened) * 2
+        if pts > 0:
+            record_game_score(
+                user_id=user_id, username=username, display_name=display_name, game="mines", points=pts, db_path=db_path
+            )
+        with _connect(db_path) as conn:
+            conn.execute(
+                "UPDATE mines_sessions SET state_json=?, updated_at=CURRENT_TIMESTAMP WHERE chat_id=? AND user_id=?",
+                (json.dumps(state), chat_id, user_id),
+            )
+            conn.commit()
+        return f"💥 <b>Бум!</b> Нарвался на мину. Очки за проход: <b>+{pts}</b>", _render_mines_grid(state), False
+
+    # Flood-fill zero-adjacent cells
+    stack = [target]
+    while stack:
+        cr, cc = stack.pop()
+        if (cr, cc) in opened or (cr, cc) in mines:
+            continue
+        opened.add((cr, cc))
+        if _mines_adj(mines, cr, cc) == 0:
+            for dr in (-1, 0, 1):
+                for dc in (-1, 0, 1):
+                    nr, nc = cr + dr, cc + dc
+                    if 0 <= nr < MINES_SIZE and 0 <= nc < MINES_SIZE and (nr, nc) not in opened:
+                        stack.append((nr, nc))
+
+    state["opened"] = [list(p) for p in opened]
+    safe_total = MINES_SIZE * MINES_SIZE - MINES_COUNT
+    if len(opened) >= safe_total:
+        state["won"] = True
+        stats = record_game_score(
+            user_id=user_id, username=username, display_name=display_name, game="mines", points=60, db_path=db_path
+        )
+        with _connect(db_path) as conn:
+            conn.execute(
+                "UPDATE mines_sessions SET state_json=?, updated_at=CURRENT_TIMESTAMP WHERE chat_id=? AND user_id=?",
+                (json.dumps(state), chat_id, user_id),
+            )
+            conn.commit()
+        return (
+            f"🏆 <b>Поле зачищено! +60 очков</b> (Всего: <b>{stats['total_points']}</b>)",
+            _render_mines_grid(state),
+            False,
+        )
+
+    with _connect(db_path) as conn:
+        conn.execute(
+            "UPDATE mines_sessions SET state_json=?, updated_at=CURRENT_TIMESTAMP WHERE chat_id=? AND user_id=?",
+            (json.dumps(state), chat_id, user_id),
+        )
+        conn.commit()
+    return (
+        f"💣 <b>Сапёр 5×5</b> | Мин: <b>{MINES_COUNT}</b> | Открыто: <b>{len(opened)}/{safe_total}</b>",
+        _render_mines_grid(state),
+        True,
+    )

@@ -482,14 +482,47 @@ async def main() -> None:
                 except Exception:
                     pass
                 return
+            elif subgame == "mines":
+                if arg == "tap" and len(parts) > 5:
+                    gtext, grid, _ = gmod.step_mines_game(
+                        chat_id=cid,
+                        user_id=u.id,
+                        username=uname,
+                        display_name=dname,
+                        row=int(parts[4]),
+                        col=int(parts[5]),
+                    )
+                else:
+                    gtext, grid, _ = gmod.start_mines_game(chat_id=cid, user_id=u.id)
+                mrows = [
+                    [
+                        InlineKeyboardButton(
+                            text=cell,
+                            callback_data=f"cmd:game:mines:tap:{r_idx}:{c_idx}",
+                        )
+                        for c_idx, cell in enumerate(row)
+                    ]
+                    for r_idx, row in enumerate(grid)
+                ]
+                mrows.append(
+                    [
+                        InlineKeyboardButton(text="🔄 Новая игра", callback_data="cmd:game:mines:start"),
+                        InlineKeyboardButton(text="🏆 Топ Сапёра", callback_data="cmd:game:top:mines"),
+                    ]
+                )
+                mrows.append([InlineKeyboardButton(text="⬅️ Игры", callback_data="cmd:menu:games")])
+                gkb = InlineKeyboardMarkup(inline_keyboard=mrows)
             else:
-                board_game = arg if arg in ("dice_duel", "snake", "mafia") else "dice_duel"
+                board_game = arg if arg in ("dice_duel", "snake", "mafia", "mines") else "dice_duel"
                 gtext = gmod.format_leaderboard_html(board_game)
                 gkb = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(text="🎲 Кости", callback_data="cmd:game:top:dice_duel"),
                             InlineKeyboardButton(text="🐍 Змейка", callback_data="cmd:game:top:snake"),
+                        ],
+                        [
+                            InlineKeyboardButton(text="💣 Сапёр", callback_data="cmd:game:top:mines"),
                             InlineKeyboardButton(text="🕵️ Мафия", callback_data="cmd:game:top:mafia"),
                         ],
                         [InlineKeyboardButton(text="⬅️ Игры", callback_data="cmd:menu:games")],
@@ -539,6 +572,7 @@ async def main() -> None:
                 text = (
                     "🎮 <b>Игры в чате</b>\n\n"
                     "• <b>🐍 Змейка</b> — управляй прямо в сообщении кнопками!\n"
+                    "• <b>💣 Сапёр 5×5</b> — открывай клетки без мин, +60 очков за победу.\n"
                     "• <b>🕵️ Мафия</b> — лобби для компании (роли в ЛС + дневное голосование).\n"
                     "• <b>🎲 Кости</b> — быстрая дуэль с таблицей рекордов по ID и @username."
                 )
@@ -546,13 +580,16 @@ async def main() -> None:
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(text="🐍 Змейка", callback_data="cmd:game:snake:start"),
-                            InlineKeyboardButton(text="🕵️ Мафия", callback_data="cmd:game:mafia:menu"),
+                            InlineKeyboardButton(text="💣 Сапёр", callback_data="cmd:game:mines:start"),
                         ],
                         [
+                            InlineKeyboardButton(text="🕵️ Мафия", callback_data="cmd:game:mafia:menu"),
                             InlineKeyboardButton(text="🎲 Кости", callback_data="cmd:game:duel"),
-                            InlineKeyboardButton(text="🏆 Рекорды", callback_data="cmd:game:top:dice_duel"),
                         ],
-                        [InlineKeyboardButton(text="⬅️ Назад", callback_data="cmd:home")],
+                        [
+                            InlineKeyboardButton(text="🏆 Рекорды", callback_data="cmd:game:top:dice_duel"),
+                            InlineKeyboardButton(text="⬅️ Назад", callback_data="cmd:home"),
+                        ],
                     ]
                 )
             elif sub == "ai":
