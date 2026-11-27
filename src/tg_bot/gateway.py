@@ -579,29 +579,27 @@ async def main() -> None:
                     f"https://rixed.store/arcade/?uid={u.id}"
                     f"&uname={quote(u.username or '')}&dname={quote(u.full_name or '')}"
                 )
+                miniapp_short = os.environ.get("MINIAPP_SHORT_NAME", "").strip()
+                group_snake_url = (
+                    f"https://t.me/{me.username}/{miniapp_short}"
+                    if miniapp_short
+                    else f"https://t.me/{me.username}?start=snake"
+                )
                 html5_btn = (
-                    InlineKeyboardButton(text="🚀 Змейка 60 FPS (HTML5)", web_app=WebAppInfo(url=arcade_url))
+                    InlineKeyboardButton(text="🐍 Змейка 60 FPS (HTML5)", web_app=WebAppInfo(url=arcade_url))
                     if is_priv_chat
-                    else InlineKeyboardButton(
-                        text="🚀 Змейка 60 FPS (HTML5)",
-                        url=f"https://t.me/{me.username}?start=snake",
-                    )
+                    else InlineKeyboardButton(text="🐍 Змейка 60 FPS (HTML5)", url=group_snake_url)
                 )
                 text = (
                     "🎮 <b>Игры в чате</b>\n\n"
-                    "• <b>🚀 Змейка 60 FPS (HTML5)</b> — плавный Canvas, свайпы, частицы и авто-запись в рейтинг!\n"
-                    "• <b>🐍 Змейка в чате</b> — быстрая игра прямо в сообщении.\n"
+                    "• <b>🐍 Змейка 60 FPS (HTML5)</b> — плавный Canvas, свайпы, частицы и авто-запись в рейтинг!\n"
                     "• <b>💣 Сапёр 5×5</b> — открывай клетки без мин, +60 очков за победу.\n"
                     "• <b>🕵️ Мафия</b> — лобби для компании (роли в ЛС + дневное голосование).\n"
                     "• <b>🎲 Кости</b> — быстрая дуэль с таблицей рекордов по ID и @username."
                 )
                 kb = InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [html5_btn],
-                        [
-                            InlineKeyboardButton(text="🐍 Змейка (чат)", callback_data="cmd:game:snake:start"),
-                            InlineKeyboardButton(text="💣 Сапёр", callback_data="cmd:game:mines:start"),
-                        ],
+                        [html5_btn, InlineKeyboardButton(text="💣 Сапёр", callback_data="cmd:game:mines:start")],
                         [
                             InlineKeyboardButton(text="🕵️ Мафия", callback_data="cmd:game:mafia:menu"),
                             InlineKeyboardButton(text="🎲 Кости", callback_data="cmd:game:duel"),

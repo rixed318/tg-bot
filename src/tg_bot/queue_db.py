@@ -116,6 +116,7 @@ def connect(path: Path = DEFAULT_DATABASE) -> Iterator[sqlite3.Connection]:
         _ensure_column(database, "tasks", "decision_flag", "text")
         _ensure_column(database, "tasks", "decision_reason", "text")
         _ensure_column(database, "tasks", "covered_by_task_id", "integer")
+        _ensure_column(database, "tasks", "persona", "text")
         _ensure_column(database, "observations", "reply_to_message_id", "integer")
 
         database.execute(
@@ -348,7 +349,7 @@ def _context_rows(
         f"""
         select o.message_id, o.sender_id, o.sender_name, o.text, o.photo_file_id,
                o.reply_to_message_id, o.created_at,
-               t.response, t.decision_flag, t.decision_reason, t.completed_at
+               t.response, t.decision_flag, t.decision_reason, t.completed_at, t.persona
         from observations o
         left join tasks t on t.chat_id=o.chat_id and t.message_id=o.message_id
         where o.chat_id = ? {clause}
@@ -375,11 +376,13 @@ def _context_rows(
         if row["decision_reason"]:
             item["decision_reason"] = row["decision_reason"]
         result.append(item)
-        if row["response"] and row["response"] not in {"[[skip]]", "[[muted]]"}:
+        if row["response"] and row["response"] not in {"[[skip]]", "[[muted]]", "[[deleted]]"}:
+            p_tag = row["persona"]
+            bot_author = f"Тау бао (как {p_tag})" if p_tag and p_tag != "default" else "Тау бао"
             result.append(
                 {
                     "message_id": row["message_id"],
-                    "author": "Тау бао",
+                    "author": bot_author,
                     "text": row["response"],
                     "source": source,
                     "created_at": row["completed_at"] or row["created_at"],
@@ -535,7 +538,7 @@ def all_contexts(database: sqlite3.Connection) -> list[dict[str, Any]]:
         """
         select o.chat_id, o.message_id, o.sender_id, o.sender_name, o.text,
                o.photo_file_id, o.reply_to_message_id, o.created_at,
-               t.response, t.decision_flag, t.decision_reason, t.completed_at
+               t.response, t.decision_flag, t.decision_reason, t.completed_at, t.persona
         from observations o
         left join tasks t on t.chat_id=o.chat_id and t.message_id=o.message_id
         order by o.chat_id, o.message_id
@@ -560,12 +563,14 @@ def all_contexts(database: sqlite3.Connection) -> list[dict[str, Any]]:
             entry["decision_reason"] = row["decision_reason"]
         grouped.setdefault(chat_id, []).append(entry)
 
-        if row["response"] and row["response"] not in {"[[skip]]", "[[muted]]"}:
+        if row["response"] and row["response"] not in {"[[skip]]", "[[muted]]", "[[deleted]]"}:
+            p_tag = row["persona"]
+            bot_author = f"Тау бао (как {p_tag})" if p_tag and p_tag != "default" else "Тау бао (ГС)"
             grouped[chat_id].append(
                 {
                     "message_id": row["message_id"],
                     "sender_id": 9231461559,
-                    "author": "Тау бао (ГС)",
+                    "author": bot_author,
                     "text": row["response"],
                     "has_media": True,
                     "created_at": row["completed_at"] or row["created_at"],
@@ -601,6 +606,11 @@ def complete_tasks(
     now_ts = now_iso()
     is_actual_reply = response not in {"[[skip]]", "[[muted]]", ""}
     effective_flag = decision_flag or ("reply" if is_actual_reply else "skip")
+    try:
+        persona_row = database.execute("select value from bot_settings where key='persona'").fetchone()
+        active_persona = str(persona_row["value"]).strip() if persona_row and persona_row["value"] else "default"
+    except sqlite3.OperationalError:
+        active_persona = "default"
 
     for tid in task_ids:
         covered_by = primary_task_id if (is_actual_reply and primary_task_id and tid != primary_task_id) else None
@@ -614,10 +624,11 @@ def complete_tasks(
                 decision_flag=?,
                 decision_reason=coalesce(?, decision_reason),
                 covered_by_task_id=coalesce(?, covered_by_task_id),
+                persona=coalesce(?, persona),
                 error=null
             where id=?
             """,
-            (now_ts, task_resp, effective_flag, decision_reason, covered_by, tid),
+            (now_ts, task_resp, effective_flag, decision_reason, covered_by, active_persona, tid),
         )
 
     if is_actual_reply:
