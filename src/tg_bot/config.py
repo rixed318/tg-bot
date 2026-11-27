@@ -62,7 +62,7 @@ YT_DLP_BIN = Path(
 
 # Trigger & batching tuning
 GROUP_DEBOUNCE_SECONDS = float(os.environ.get("TG_BOT_DEBOUNCE_SECONDS", "4.0"))
-GROUP_COOLDOWN_SECONDS = float(os.environ.get("TG_BOT_COOLDOWN_SECONDS", "12.0"))
+GROUP_COOLDOWN_SECONDS = float(os.environ.get("TG_BOT_COOLDOWN_SECONDS", "0.0"))
 MAX_UNANSWERED_WINDOW = int(os.environ.get("TG_BOT_MAX_UNANSWERED", "8"))
 UNANSWERED_LOOKBACK_MINUTES = int(os.environ.get("TG_BOT_UNANSWERED_MINUTES", "45"))
 INLINE_HISTORY_LIMIT = int(os.environ.get("TG_BOT_INLINE_HISTORY", "25"))
