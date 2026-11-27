@@ -26,6 +26,11 @@ Telegram limits animated/video stickers and custom emojis to **<= 3.0 seconds**,
   - **Мафия / Бункер (компанейская)** — multi-player group lobby via inline buttons (`Присоединиться`, `Начать игру`, ночные роли в ЛС, дневное голосование в группе).
   - **Быстрые чат-дуэли** (`/commands -> 🎮 Игры`: бросок кубика / дуэль / таблица рекордов).
 
-## 4. Multi-Outfit & Body/Hands/Torso Character System
-- Per-character visual outfits under `voices/avatars/<char>_<outfit>/` (e.g. `anya_street`, `ruslan_street`, `anya_cyber`, etc.) selectable in `/commands -> 👗 Визуал` with live preview & auto-cleanup.
-- Full body/torso/head/hands layered sprite rig & `LivePortrait` GPU upgrade path.
+## 4. Multi-Outfit, Accessories & Avatar Studio Mini App + Marketplace
+- **Ksyusha Gold-Standard Character:**
+  - Outfits: `quality`, `street`, `cyber`, `cozy`, `beach` (swimwear + panama), `panama` (accessories), `buns` (hairstyle).
+  - Each outfit has full lip-sync + blink + emotion set (`neutral_closed/half/open/blink`, `happy_open`, `laugh_open`, `sad_open`, `angry_open`, `shock_open`, `flirty_wink_open`).
+- **Avatar Studio Mini App (`/arcade/studio`):**
+  - Visual dress-up & customization Mini App: browse characters, outfits, hairstyles, accessories with live preview and 1-tap `Применить образ` (`POST /arcade/api/set_visual` -> updates `bot_settings`).
+- **Avatar & Voice Marketplace (Магазин аватаров и голосов на заказ):**
+  - Ready-to-use 2D character packs, custom outfit/accessory drops, and bespoke voice fine-tuning (`F5-TTS` from 8–10 min recording) + custom 2D persona generation on demand (Telegram Stars / TON Connect).

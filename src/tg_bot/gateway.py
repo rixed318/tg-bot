@@ -358,7 +358,7 @@ async def main() -> None:
                 )
             return
         elif action == "setvisual" and len(parts) > 2:
-            mode = parts[2] if parts[2] in ("quality", "street", "cyber", "cozy", "buns", "funny") else "quality"
+            mode = parts[2] if parts[2] in ("quality", "street", "cyber", "cozy", "buns", "beach", "panama", "funny") else "quality"
             set_bot_setting("speech_display", mode)
             labels = {
                 "quality": "Визуал: Обычный (2D)",
@@ -366,6 +366,8 @@ async def main() -> None:
                 "cyber": "Визуал: Cyberpunk (2D)",
                 "cozy": "Визуал: Cozy (2D)",
                 "buns": "Визуал: Пучки (2D)",
+                "beach": "Визуал: Купальник (2D)",
+                "panama": "Визуал: Панама (2D)",
                 "funny": "Визуал: Ржачный",
             }
             await callback.answer(labels[mode])
@@ -600,12 +602,15 @@ async def main() -> None:
         if action == "menu" and len(parts) > 2:
             sub = parts[2]
             if sub == "visual":
+                is_priv_v = callback.message is not None and callback.message.chat.type == ChatType.PRIVATE
                 visual_items = [
                     ("quality", "✨ Обычный (2D)"),
                     ("street", "🧥 Streetwear (2D)"),
                     ("cyber", "🤖 Cyberpunk (2D)"),
                     ("cozy", "🧶 Cozy (2D)"),
                     ("buns", "🎀 Пучки (2D)"),
+                    ("beach", "🏖 Купальник (2D)"),
+                    ("panama", "🧢 Панама (2D)"),
                     ("funny", "🤪 Ржачный (фото)"),
                 ]
                 text, kb = _build_grid_panel(
@@ -614,6 +619,12 @@ async def main() -> None:
                     settings.get("speech_display", "quality"),
                     "cmd:setvisual",
                 )
+                studio_btn = (
+                    InlineKeyboardButton(text="🎨 Открыть Avatar Studio", web_app=WebAppInfo(url="https://rixed.store/arcade/studio"))
+                    if is_priv_v
+                    else InlineKeyboardButton(text="🎨 Открыть Avatar Studio", url=f"https://t.me/{me.username}?start=studio")
+                )
+                kb.inline_keyboard.insert(-1, [studio_btn])
                 kb.inline_keyboard.insert(
                     -1,
                     [InlineKeyboardButton(text="👀 Показать превью образа", callback_data="cmd:previewvisual")],
@@ -695,6 +706,14 @@ async def main() -> None:
         )
         arg = (message.text or "").split(maxsplit=1)[1] if len((message.text or "").split(maxsplit=1)) > 1 else ""
         arg_clean = arg.strip().lower()
+        if arg_clean == "studio":
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="🎨 Открыть Avatar Studio", web_app=WebAppInfo(url="https://rixed.store/arcade/studio"))]
+                ]
+            )
+            await message.answer("🎨 <b>Avatar Studio</b> — выбирай внешность, наряды и аксессуары:", parse_mode="HTML", reply_markup=kb)
+            return
         if arg_clean.startswith("game_"):
             slug = arg.strip()[5:]
             u = message.from_user
@@ -1113,12 +1132,51 @@ async def _start_arcade_server() -> web.AppRunner:
         ctype, _ = mimetypes.guess_type(tail)
         return web.Response(body=body, content_type=ctype or "application/octet-stream")
 
+    async def handle_studio(_request: web.Request) -> web.Response:
+        for cand in (
+            Path("/opt/rixed-joke-bot/avatar_studio.html"),
+            Path(__file__).with_name("avatar_studio.html"),
+        ):
+            if cand.is_file():
+                return web.Response(text=cand.read_text(encoding="utf-8"), content_type="text/html")
+        return web.Response(text="<h1>Studio not found</h1>", status=404, content_type="text/html")
+
+    async def handle_avatar_img(request: web.Request) -> web.Response:
+        folder = request.match_info.get("folder", "").strip("/")
+        fname = request.match_info.get("fname", "neutral_closed.png").strip("/")
+        if not folder or ".." in folder or ".." in fname:
+            return web.Response(status=400)
+        for root in (
+            Path("/opt/rixed-joke-bot/avatars_preview"),
+            Path(__file__).resolve().parents[2] / "voices" / "avatars",
+        ):
+            cand = root / folder / fname
+            if cand.is_file():
+                return web.Response(body=cand.read_bytes(), content_type="image/png")
+        return web.Response(status=404)
+
+    async def handle_set_visual(request: web.Request) -> web.Response:
+        try:
+            data = await request.json()
+            persona = str(data.get("persona") or "").strip()
+            mode = str(data.get("speech_display") or "quality").strip()
+        except Exception:
+            return web.json_response({"ok": False}, status=400)
+        if persona:
+            set_bot_setting("persona", persona)
+        if mode in ("quality", "street", "cyber", "cozy", "buns", "beach", "panama", "funny"):
+            set_bot_setting("speech_display", mode)
+        return web.json_response({"ok": True})
+
     app = web.Application()
     app.router.add_get("/", handle_index)
     app.router.add_get("/index.html", handle_index)
+    app.router.add_get("/studio", handle_studio)
+    app.router.add_get("/avatar/{folder}/{fname}", handle_avatar_img)
     app.router.add_get("/ext/{slug}/{tail:.*}", handle_ext_game)
     app.router.add_post("/api/score", handle_score)
     app.router.add_get("/api/top", handle_top)
+    app.router.add_post("/api/set_visual", handle_set_visual)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "127.0.0.1", int(os.environ.get("ARCADE_PORT", "8120")))
