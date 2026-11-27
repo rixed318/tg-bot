@@ -121,6 +121,24 @@
       "speed": 1.11,
       "ffmpeg_fx": "asetrate=24000*1.075,aresample=24000,atempo=0.9302,equalizer=f=2800:width_type=o:width=1.3:g=3"
     },
+    "kaneki": {
+      "label": "Канеки",
+      "aliases": ["канеки", "кен канеки", "kaneki"],
+      "audio": "kaneki.wav",
+      "transcript_file": "kaneki.txt",
+      "avatar_dir": "avatars/kaneki",
+      "speed": 0.94,
+      "ffmpeg_fx": "asetrate=24000*0.960,aresample=24000,atempo=1.0417,equalizer=f=200:width_type=o:width=1.5:g=2"
+    },
+    "haldina": {
+      "label": "Халдина",
+      "aliases": ["халдина", "haldina"],
+      "audio": "haldina.wav",
+      "transcript_file": "haldina.txt",
+      "avatar_dir": "avatars/haldina",
+      "speed": 1.01,
+      "ffmpeg_fx": "asetrate=24000*0.970,aresample=24000,atempo=1.0309,equalizer=f=1800:width_type=o:width=1.4:g=2"
+    },
     "arsen": {
       "label": "Арсен Маркарян",
       "aliases": ["арсен", "маркарян", "арсен маркарян", "коуч"],

@@ -60,6 +60,8 @@ CHARACTER_CATALOG: list[tuple[str, str]] = [
     ("fedya", "Федя"),
     ("ruslan", "Руслан"),
     ("choknutiy", "Чокнутый"),
+    ("kaneki", "Канеки"),
+    ("haldina", "Халдина"),
     ("arsen", "Арсен Маркарян"),
     ("demon", "Демон"),
     ("custom", "Свой голос"),
