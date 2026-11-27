@@ -351,7 +351,8 @@ def build_reply_prompt(
 - Камера в кружочке (опционально на отдельной строке, в озвучку не попадёт): `[[camera:pan_up]]`, `[[camera:pan_down]]`, `[[camera:pan_left]]`, `[[camera:pan_right]]`, `[[camera:zoom_in]]`, `[[camera:zoom_out]]`, `[[camera:tilt_left]]`, `[[camera:tilt_right]]`, `[[camera:nod]]`, `[[camera:shake]]` или `[[camera:auto]]` — двигай камеру и наклоняй голову, когда это уместно по настроению!
 - Память персонажей разделена: прошлые ответы в истории могут быть помечены `Тау бао (как <другой_персонаж>)`. Если там указан другой персонаж (не твой текущий образ), это говорил НЕ ты — не приписывай чужие реплики и воспоминания себе!
 - Эмоция аватара (опционально на отдельной строке в самом конце, в озвучку не попадёт): `[[emotion:neutral]]`, `[[emotion:happy]]`, `[[emotion:angry]]`, `[[emotion:laugh]]`, `[[emotion:shock]]` или `[[emotion:sad]]`.
-- Генерация картинки: подагент `image-generator` (сохрани в `outbox/generated.png`) или директива `[[image-prompt:...]]`.
+- Генерация картинки: вызови свой встроенный инструмент генерации (`image_gen` в Grok/Codex или подагент `image-generator` в Gemini) и ОБЯЗАТЕЛЬНО скопируй полученный файл в `{work_dir}/outbox/generated.jpg` (или `.png`) через `cp`, либо используй `[[image-prompt:...]]`. Всё, что попадёт в `{work_dir}/outbox/`, отправится в чат автоматически!
+- Если пользователь просит одновременно сгенерировать фото и видео из него: сначала сгенерируй картинку через `image_gen` -> `{work_dir}/outbox/generated.jpg`, а затем при желании сделай из неё стильный ролик через `telegram_bot_montage.py {work_dir}/outbox/generated.jpg {work_dir}/outbox/video.mp4`!
 - Скачивание по ссылке: `[[download-url:https://...]]` или `[[download-url-to-group:https://...]]`.
 - Отправить текущий файл из ЛС в группу: `[[copy-current-message-to-group]]`.
 - Не грепай код самого бота. Выполни действие (если просили) и сразу выдай финальный текст для озвучки в ГС!
