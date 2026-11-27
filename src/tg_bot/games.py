@@ -9,9 +9,17 @@ import random
 import sqlite3
 from typing import Any
 
-DEFAULT_GAMES_DB = Path(
-    os.environ.get("TG_BOT_GAMES_DB", str(Path.home() / ".cache" / "rixed-joke-bot" / "games.db"))
-)
+def _default_games_db() -> Path:
+    env = os.environ.get("TG_BOT_GAMES_DB")
+    if env:
+        return Path(env)
+    vps_dir = Path("/var/lib/rixed-joke-bot")
+    if vps_dir.is_dir() and os.access(vps_dir, os.W_OK):
+        return vps_dir / "games.db"
+    return Path.home() / ".cache" / "rixed-joke-bot" / "games.db"
+
+
+DEFAULT_GAMES_DB = _default_games_db()
 
 SNAKE_SIZE = 7
 _DIRS = {

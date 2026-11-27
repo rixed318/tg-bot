@@ -277,11 +277,11 @@ async def main() -> None:
     async def handle_panel_callback(callback: CallbackQuery) -> None:
         if callback.from_user is None or callback.message is None:
             return
-        if not await is_configured_group_admin(bot, callback.from_user.id):
+        data = callback.data or ""
+        is_public_game = data.startswith("cmd:game:") or data == "cmd:menu:games"
+        if not is_public_game and not await is_configured_group_admin(bot, callback.from_user.id):
             await callback.answer("Только для администраторов группы.", show_alert=True)
             return
-
-        data = callback.data or ""
         parts = data.split(":")
         action = parts[1] if len(parts) > 1 else "home"
 
