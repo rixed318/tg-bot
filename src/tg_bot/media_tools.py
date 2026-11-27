@@ -50,6 +50,7 @@ STICKER_DIRECTIVE = re.compile(r"^\[\[(?:make-)?sticker\]\]$")
 GIF_DIRECTIVE = re.compile(r"^\[\[(?:make-)?gif\]\]$")
 EMOTION_DIRECTIVE = re.compile(r"^\[\[emotion:(?P<emotion>[a-zA-Z_-]+)\]\]$")
 SINGING_COVER_DIRECTIVE = re.compile(r"^\[\[singing-cover(?::(?P<mid>\d+))?\]\]$")
+RICH_TEXT_DIRECTIVE = re.compile(r"^\[\[rich-text\]\]$")
 
 MEDIA_CATALOG: dict[str, dict[str, Any]] = {
     "anya_tiktok": {
@@ -105,6 +106,7 @@ class AgentResponse:
     emotion: str = "neutral"
     singing_cover: bool = False
     singing_cover_message_id: int | None = None
+    rich_text: bool = False
 
 
 def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
@@ -128,9 +130,13 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
     emotion = "neutral"
     singing_cover = False
     singing_cover_message_id: int | None = None
+    rich_text = False
 
     for line in response.splitlines():
         stripped = line.strip()
+        if RICH_TEXT_DIRECTIVE.fullmatch(stripped):
+            rich_text = True
+            continue
         cover_match = SINGING_COVER_DIRECTIVE.fullmatch(stripped)
         if cover_match:
             singing_cover = True
@@ -246,6 +252,7 @@ def parse_agent_response(response: str, work_dir: Path) -> AgentResponse:
         emotion=emotion,
         singing_cover=singing_cover,
         singing_cover_message_id=singing_cover_message_id,
+        rich_text=rich_text,
     )
 
 

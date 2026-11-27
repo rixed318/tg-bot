@@ -61,6 +61,7 @@ from tg_bot.telegram_api import (
     send_chat_action,
     send_document,
     send_photo,
+    send_rich_html,
     send_sticker,
     send_video,
     send_video_note,
@@ -692,6 +693,44 @@ def _find_cover_audio(
     return None
 
 
+def _send_rich_reply(
+    token: str,
+    task: dict[str, Any],
+    html_text: str,
+    work_dir: Path,
+    *,
+    reply_to_message_id: int | None,
+) -> tuple[int, str]:
+    """Send a Rich HTML message via Telegram Premium userbot (if enabled) or Bot API."""
+    bot_settings = task.get("bot_settings") or {}
+    use_userbot = bot_settings.get("use_userbot") in ("1", "true", "True")
+    userbot_py = Path("/home/rus/.local/share/rixed-joke-userbot/venv/bin/python")
+    if use_userbot and userbot_py.is_file():
+        html_path = work_dir / f"rich_{task['id']}.html"
+        html_path.write_text(html_text, encoding="utf-8")
+        command = [
+            str(userbot_py),
+            str(Path(__file__).resolve().with_name("premium_transport.py")),
+            "--chat-id",
+            str(task["chat_id"]),
+            "--html-file",
+            str(html_path),
+        ]
+        if reply_to_message_id is not None and int(task["chat_id"]) < 0:
+            command.extend(["--reply-to", str(reply_to_message_id)])
+        try:
+            res = subprocess.run(command, check=True, capture_output=True, text=True, timeout=60)
+            mid = int(res.stdout.strip().splitlines()[-1])
+            LOGGER.info("Sent Premium userbot rich reply task=%s msg_id=%s", task["id"], mid)
+            return mid, html_text
+        except Exception as exc:
+            LOGGER.warning("Userbot rich reply failed (%s), falling back to Bot API", exc)
+
+    mid = send_rich_html(token, task, html_text, reply_to_message_id=reply_to_message_id)
+    LOGGER.info("Sent Bot API rich reply task=%s msg_id=%s", task["id"], mid)
+    return mid, html_text
+
+
 def _send_large_document(task: dict[str, Any], path: Path, reply_to_message_id: int | None) -> int:
     command = [
         "/home/rus/.local/share/rixed-joke-userbot/venv/bin/python",
@@ -738,6 +777,11 @@ def process_one(token: str) -> bool:
             attachment = _transcribe_unanswered_audio(token, task, unanswered, work_dir)
             user_text = str(task.get("text") or "")
 
+            primary_is_cover = is_singing_cover_request([task])
+            recent_bot_covered = any(
+                "[singing-cover" in str(item.get("text") or "")
+                for item in (task.get("context") or [])[-3:]
+            )
             cover_audio = (
                 _find_cover_audio(
                     token,
@@ -746,11 +790,11 @@ def process_one(token: str) -> bool:
                     work_dir,
                     fallback_attachment=attachment,
                 )
-                if is_singing_cover_request(unanswered)
+                if (primary_is_cover and not recent_bot_covered)
                 else None
             )
 
-            if cover_audio is not None and is_singing_cover_request(unanswered):
+            if cover_audio is not None:
                 anchor_message_id = max(
                     int(item.get("message_id") or 0) for item in unanswered
                 )
@@ -1047,14 +1091,23 @@ def process_one(token: str) -> bool:
                 if decision.target_message_ids
                 else int(task["message_id"])
             )
-            voice_msg_id, spoken_transcript = _send_voice_reply(
-                token,
-                task,
-                parsed.text,
-                work_dir,
-                reply_to_message_id=anchor_msg_id,
-                emotion=parsed.emotion,
-            )
+            if parsed.rich_text:
+                voice_msg_id, spoken_transcript = _send_rich_reply(
+                    token,
+                    task,
+                    parsed.text,
+                    work_dir,
+                    reply_to_message_id=anchor_msg_id,
+                )
+            else:
+                voice_msg_id, spoken_transcript = _send_voice_reply(
+                    token,
+                    task,
+                    parsed.text,
+                    work_dir,
+                    reply_to_message_id=anchor_msg_id,
+                    emotion=parsed.emotion,
+                )
 
             outgoing_photos = (
                 (*parsed.photos, generated_photo)

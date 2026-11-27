@@ -92,10 +92,12 @@ def _build_main_panel() -> tuple[str, InlineKeyboardMarkup]:
     avatar_on = settings.get("avatar_enabled", "1") == "1"
     speech_display = settings.get("speech_display", "quality")
     funny_on = speech_display == "funny"
+    userbot_on = settings.get("use_userbot") == "1"
 
     status_line = "🔇 На паузе (только слушает)" if muted else "🔊 Активен (отвечает в чате)"
     fmt_line = "🎬 Кружочки-аватары" if avatar_on else "🎙 Только голосовые (ГС)"
     display_line = "🤪 Ржачный" if funny_on else "✨ Обычный (качественный)"
+    account_line = "⭐ Telegram Premium (мой аккаунт)" if userbot_on else "🤖 Обычный бот"
 
     text = (
         "⚙️ <b>Панель управления ботом</b>\n\n"
@@ -104,7 +106,8 @@ def _build_main_panel() -> tuple[str, InlineKeyboardMarkup]:
         f"• Поведение: <b>{_label_for(CHARACTER_CATALOG, persona, persona)}</b>\n"
         f"• ИИ-модель: <b>{_label_for(AI_MODELS, ai_model, ai_model)}</b>\n"
         f"• Формат: <b>{fmt_line}</b>\n"
-        f"• Отображение речи: <b>{display_line}</b>"
+        f"• Отображение речи: <b>{display_line}</b>\n"
+        f"• Отправка: <b>{account_line}</b>"
     )
     mute_btn = (
         InlineKeyboardButton(text="🔊 Включить (Unmute)", callback_data="cmd:mute:0")
@@ -119,10 +122,14 @@ def _build_main_panel() -> tuple[str, InlineKeyboardMarkup]:
         text="🎭 Отображение речи: Ржачный" if funny_on else "🎭 Отображение речи: Обычный",
         callback_data=f"cmd:speech_display:{'quality' if funny_on else 'funny'}",
     )
+    userbot_btn = InlineKeyboardButton(
+        text="⭐ Отправка: Premium" if userbot_on else "🤖 Отправка: Бот",
+        callback_data=f"cmd:userbot:{'0' if userbot_on else '1'}",
+    )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [mute_btn, fmt_btn],
-            [display_btn],
+            [display_btn, userbot_btn],
             [
                 InlineKeyboardButton(text="🎙 Голос (отдельно)", callback_data="cmd:menu:voice"),
                 InlineKeyboardButton(text="🧠 Поведение (отдельно)", callback_data="cmd:menu:persona"),
@@ -288,6 +295,10 @@ async def main() -> None:
             mode = "funny" if parts[2] == "funny" else "quality"
             set_bot_setting("speech_display", mode)
             await callback.answer("Отображение речи: Ржачный" if mode == "funny" else "Отображение речи: Обычный")
+        elif action == "userbot" and len(parts) > 2:
+            enabled = parts[2] == "1"
+            set_bot_setting("use_userbot", "1" if enabled else "0")
+            await callback.answer("Отправка: Telegram Premium" if enabled else "Отправка: Бот")
         elif action == "setchar" and len(parts) > 2:
             cid = parts[2]
             set_bot_setting("voice_profile", cid)

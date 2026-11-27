@@ -114,6 +114,35 @@ def send_chat_action(token: str, task: dict[str, Any], action: str = "record_voi
         pass
 
 
+def send_rich_html(
+    token: str,
+    task: dict[str, Any],
+    html_text: str,
+    reply_to_message_id: int | None = None,
+) -> int:
+    """Send a Telegram Rich HTML message via Bot API sendMessage."""
+    params: dict[str, Any] = {
+        "chat_id": task["chat_id"],
+        "text": html_text[:4096],
+        "parse_mode": "HTML",
+    }
+    if reply_to_message_id is not None:
+        params["reply_parameters"] = json.dumps(
+            {"message_id": reply_to_message_id, "allow_sending_without_reply": True}
+        )
+    if task.get("thread_id"):
+        params["message_thread_id"] = task["thread_id"]
+    request = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        data=urllib.parse.urlencode(params).encode(),
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        payload = json.loads(response.read().decode())
+    if not payload.get("ok"):
+        raise RuntimeError(str(payload))
+    return int(payload["result"]["message_id"])
+
+
 def _build_reply_fields(
     task: dict[str, Any], reply_to_message_id: int | None
 ) -> dict[str, str]:

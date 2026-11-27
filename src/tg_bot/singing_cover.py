@@ -55,6 +55,9 @@ def resolve_singing_reference(
     entry = profiles.get(profile_name) or profiles.get("default") or {}
     audio_name = str(entry.get("audio") or "default.wav")
     audio_path = VOICES_DIR / audio_name
+    singing_candidate = VOICES_DIR / f"{Path(audio_name).stem}_singing.wav"
+    if singing_candidate.is_file() and singing_candidate.stat().st_size >= 1000:
+        return profile_name, singing_candidate
     if not audio_path.is_file() or audio_path.stat().st_size < 1000:
         raise FileNotFoundError(f"Singing reference voice is missing: {audio_path}")
     return profile_name, audio_path

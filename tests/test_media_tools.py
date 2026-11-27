@@ -36,3 +36,9 @@ def test_parses_singing_cover_directive(tmp_path: Path) -> None:
     resp2 = parse_agent_response("Погнали\n[[singing-cover]]", tmp_path)
     assert resp2.singing_cover is True
     assert resp2.singing_cover_message_id is None
+
+
+def test_parses_rich_text_directive(tmp_path: Path) -> None:
+    resp = parse_agent_response("<b>Привет</b>\n<blockquote>Цитата</blockquote>\n[[rich-text]]", tmp_path)
+    assert resp.rich_text is True
+    assert "<b>Привет</b>" in resp.text
