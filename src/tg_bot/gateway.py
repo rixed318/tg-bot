@@ -259,6 +259,7 @@ async def main() -> None:
     await bot.set_my_commands(
         [
             BotCommand(command="commands", description="Панель управления (голос, характер, ИИ, мут)"),
+            BotCommand(command="games", description="Все игры и мини-приложения"),
             BotCommand(command="setup", description="Привязать группу"),
             BotCommand(command="start", description="Личный диалог с ботом"),
         ]
@@ -418,6 +419,31 @@ async def main() -> None:
                     await callback.answer("⚡ Виджет отправлен!")
                 else:
                     await callback.answer(f"Telegram: {wdata.get('description', 'ошибка')[:120]}", show_alert=True)
+                return
+            elif subgame == "share":
+                catalog = await _fetch_tg_games_catalog()
+                srows: list[list[InlineKeyboardButton]] = []
+                spair: list[InlineKeyboardButton] = []
+                for item in catalog:
+                    slug = item["slug"]
+                    share_target = f"https://t.me/{me.username}?start=game_{slug}"
+                    share_url = f"https://t.me/share/url?url={quote(share_target)}&text={quote(item['icon'] + ' Зацени игру: ' + item['title'])}"
+                    spair.append(InlineKeyboardButton(text=f"📤 {item['title']}", url=share_url))
+                    if len(spair) == 2:
+                        srows.append(spair)
+                        spair = []
+                if spair:
+                    srows.append(spair)
+                srows.append([InlineKeyboardButton(text="⬅️ К играм", callback_data="cmd:menu:games")])
+                await callback.answer()
+                try:
+                    await callback.message.edit_text(
+                        "📤 <b>Выбери игру, чтобы отправить другу или в другой чат:</b>",
+                        parse_mode="HTML",
+                        reply_markup=InlineKeyboardMarkup(inline_keyboard=srows),
+                    )
+                except Exception:
+                    pass
                 return
             elif subgame == "duel":
                 gtext = gmod.play_dice_duel_round(user_id=u.id, username=uname, display_name=dname)
@@ -608,64 +634,13 @@ async def main() -> None:
                 )
             elif sub == "games":
                 is_priv_chat = callback.message is not None and callback.message.chat.type == ChatType.PRIVATE
-                u = callback.from_user
-                arcade_url = (
-                    f"https://rixed.store/arcade/?uid={u.id}"
-                    f"&uname={quote(u.username or '')}&dname={quote(u.full_name or '')}"
-                )
-                miniapp_short = os.environ.get("MINIAPP_SHORT_NAME", "").strip()
-                group_snake_url = (
-                    f"https://t.me/{me.username}/{miniapp_short}"
-                    if miniapp_short
-                    else f"https://t.me/{me.username}?start=snake"
-                )
-                html5_btn = (
-                    InlineKeyboardButton(text="🎮 Открыть Аркаду (Все игры)", web_app=WebAppInfo(url=arcade_url))
-                    if is_priv_chat
-                    else InlineKeyboardButton(text="🎮 Открыть Аркаду (Все игры)", url=group_snake_url)
-                )
-                extra_rows: list[list[InlineKeyboardButton]] = []
-                if is_priv_chat:
-                    catalog = await _fetch_tg_games_catalog()
-                    for item in catalog:
-                        slug = item["slug"]
-                        g_url = (
-                            f"https://rixed.store/arcade/ext/{slug}/index.html?uid={u.id}"
-                            f"&uname={quote(u.username or '')}&dname={quote(u.full_name or '')}"
-                        )
-                        row_btns = [
-                            InlineKeyboardButton(
-                                text=f"{item['icon']} {item['title']}",
-                                web_app=WebAppInfo(url=g_url),
-                            )
-                        ]
-                        if item.get("has_widget"):
-                            row_btns.append(
-                                InlineKeyboardButton(text="⚡ Виджет", callback_data=f"cmd:game:widget:{slug}")
-                            )
-                        extra_rows.append(row_btns)
-                    extra_rows.append(
-                        [InlineKeyboardButton(text="🔄 Обновить из GitHub (tg-games)", callback_data="cmd:game:refresh")]
-                    )
-                else:
-                    extra_rows.append(
-                        [InlineKeyboardButton(text="🕹 Все игры из tg-games (в ЛС)", url=f"https://t.me/{me.username}?start=games")]
-                    )
+                catalog = await _fetch_tg_games_catalog()
                 text = (
                     "🎮 <b>Игры и мини-приложения</b>\n\n"
-                    "• <b>🎮 Аркада (5 игр + Топ)</b> — Змейка 60 FPS, 2048, Сапёр, Кости и Мафия.\n"
-                    "• <b>🕹 GitHub <code>rixed318/tg-games</code></b> — новые папки с играми подтягиваются автоматически в ЛС!"
+                    f"• <b>🎮 Аркада (5 игр + Топ)</b> + <b>{len(catalog)}</b> игр из <code>tg-games</code>.\n"
+                    + ("• Нажми на любую игру — откроется сразу здесь, или отправь другу!" if is_priv_chat else "• Нажми на любую игру — бот откроет её у тебя в личке!")
                 )
-                kb = InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [html5_btn],
-                        *extra_rows,
-                        [
-                            InlineKeyboardButton(text="🏆 Рекорды чата", callback_data="cmd:game:top:snake"),
-                            InlineKeyboardButton(text="⬅️ Назад", callback_data="cmd:home"),
-                        ],
-                    ]
-                )
+                kb = _build_games_keyboard(me.username or "", callback.from_user, catalog, is_private=is_priv_chat)
             elif sub == "ai":
                 text, kb = _build_grid_panel(
                     "🤖 <b>Выбери нейросеть для ответов:</b>",
@@ -719,30 +694,52 @@ async def main() -> None:
             can_dm=True,
         )
         arg = (message.text or "").split(maxsplit=1)[1] if len((message.text or "").split(maxsplit=1)) > 1 else ""
-        if arg.strip().lower() in ("snake", "games"):
+        arg_clean = arg.strip().lower()
+        if arg_clean.startswith("game_"):
+            slug = arg.strip()[5:]
             u = message.from_user
-            arcade_url = (
-                f"https://rixed.store/arcade/?uid={u.id}"
+            catalog = await _fetch_tg_games_catalog()
+            meta = next((c for c in catalog if c["slug"] == slug), {"slug": slug, "title": slug, "icon": "🎮", "has_widget": False})
+            g_url = (
+                f"https://rixed.store/arcade/ext/{slug}/index.html?uid={u.id}"
                 f"&uname={quote(u.username or '')}&dname={quote(u.full_name or '')}"
             )
+            share_target = f"https://t.me/{me.username}?start=game_{slug}"
+            share_url = f"https://t.me/share/url?url={quote(share_target)}&text={quote(meta['icon'] + ' Зацени игру: ' + meta['title'])}"
+            r_btns: list[list[InlineKeyboardButton]] = [
+                [InlineKeyboardButton(text=f"🚀 Играть: {meta['icon']} {meta['title']}", web_app=WebAppInfo(url=g_url))],
+                [InlineKeyboardButton(text="📤 Отправить другу", url=share_url)],
+            ]
+            if meta.get("has_widget"):
+                r_btns.append([InlineKeyboardButton(text="⚡ Открыть как 4KB виджет", callback_data=f"cmd:game:widget:{slug}")])
+            r_btns.append([InlineKeyboardButton(text="🎮 Все игры", callback_data="cmd:menu:games")])
+            await message.answer(
+                f"{meta['icon']} <b>{meta['title']}</b> готова к запуску!",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=r_btns),
+            )
+            return
+        if arg_clean in ("snake", "games"):
             catalog = await _fetch_tg_games_catalog()
-            rows = [[InlineKeyboardButton(text="🎮 Открыть Аркаду (Все игры)", web_app=WebAppInfo(url=arcade_url))]]
-            for item in catalog:
-                slug = item["slug"]
-                g_url = (
-                    f"https://rixed.store/arcade/ext/{slug}/index.html?uid={u.id}"
-                    f"&uname={quote(u.username or '')}&dname={quote(u.full_name or '')}"
-                )
-                r = [InlineKeyboardButton(text=f"{item['icon']} {item['title']}", web_app=WebAppInfo(url=g_url))]
-                if item.get("has_widget"):
-                    r.append(InlineKeyboardButton(text="⚡ Виджет", callback_data=f"cmd:game:widget:{slug}"))
-                rows.append(r)
-            rows.append([InlineKeyboardButton(text="🔄 Обновить из tg-games", callback_data="cmd:game:refresh")])
-            rows.append([InlineKeyboardButton(text="🏆 Топ рекордов", callback_data="cmd:game:top:snake")])
-            await message.answer("🎮 <b>Игры и приложения из tg-games:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+            kb = _build_games_keyboard(me.username or "", message.from_user, catalog, is_private=True)
+            await message.answer("🎮 <b>Игры и приложения из tg-games:</b>", parse_mode="HTML", reply_markup=kb)
             return
         await message.answer(
             "Личка подключена. Настройки доступны по команде /commands."
+        )
+
+    @router.message(Command("games"))
+    async def cmd_games(message: Message) -> None:
+        if message.from_user is None:
+            return
+        is_priv = message.chat.type == ChatType.PRIVATE
+        catalog = await _fetch_tg_games_catalog()
+        kb = _build_games_keyboard(me.username or "", message.from_user, catalog, is_private=is_priv)
+        await message.answer(
+            f"🎮 <b>Игры ({len(catalog) + 5} шт.)</b>\n"
+            + ("Выбирай любую игру или поделись с другом:" if is_priv else "Выбирай игру — она откроется у тебя в личке с ботом:"),
+            parse_mode="HTML",
+            reply_markup=kb,
         )
 
     @router.message(F.web_app_data)
@@ -966,6 +963,62 @@ async def main() -> None:
 
 TG_GAMES_REPO = os.environ.get("TG_GAMES_REPO", "rixed318/tg-games").strip()
 _TG_GAMES_CACHE: tuple[float, list[dict[str, Any]]] = (0.0, [])
+
+
+def _build_games_keyboard(
+    bot_username: str,
+    user: Any,
+    catalog: list[dict[str, Any]],
+    *,
+    is_private: bool,
+) -> InlineKeyboardMarkup:
+    arcade_url = (
+        f"https://rixed.store/arcade/?uid={user.id}"
+        f"&uname={quote(user.username or '')}&dname={quote(user.full_name or '')}"
+    )
+    miniapp_short = os.environ.get("MINIAPP_SHORT_NAME", "").strip()
+    group_arcade_url = (
+        f"https://t.me/{bot_username}/{miniapp_short}"
+        if miniapp_short
+        else f"https://t.me/{bot_username}?start=snake"
+    )
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(text="🎮 Открыть Аркаду (5 игр)", web_app=WebAppInfo(url=arcade_url))
+            if is_private
+            else InlineKeyboardButton(text="🎮 Открыть Аркаду (5 игр)", url=group_arcade_url)
+        ]
+    ]
+    pair: list[InlineKeyboardButton] = []
+    for item in catalog:
+        slug = item["slug"]
+        label = f"{item['icon']} {item['title']}"
+        if is_private:
+            g_url = (
+                f"https://rixed.store/arcade/ext/{slug}/index.html?uid={user.id}"
+                f"&uname={quote(user.username or '')}&dname={quote(user.full_name or '')}"
+            )
+            btn = InlineKeyboardButton(text=label, web_app=WebAppInfo(url=g_url))
+        else:
+            btn = InlineKeyboardButton(text=label, url=f"https://t.me/{bot_username}?start=game_{slug}")
+        pair.append(btn)
+        if len(pair) == 2:
+            rows.append(pair)
+            pair = []
+    if pair:
+        rows.append(pair)
+    if is_private:
+        rows.append([
+            InlineKeyboardButton(text="📤 Отправить другу", callback_data="cmd:game:share"),
+            InlineKeyboardButton(text="🔄 Обновить", callback_data="cmd:game:refresh"),
+        ])
+    else:
+        rows.append([InlineKeyboardButton(text="🔄 Обновить список игр", callback_data="cmd:game:refresh")])
+    rows.append([
+        InlineKeyboardButton(text="🏆 Рекорды", callback_data="cmd:game:top:snake"),
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="cmd:home"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def _fetch_tg_games_catalog(*, force: bool = False) -> list[dict[str, Any]]:
