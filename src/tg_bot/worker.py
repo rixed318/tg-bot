@@ -1066,6 +1066,7 @@ def process_one(token: str) -> bool:
                                 out_sticker,
                                 max_dim=100 if parsed.make_emoji else 512,
                                 margin=6 if parsed.make_emoji else 20,
+                                cutout=parsed.cutout_photo,
                             )
                         if out_sticker.is_file():
                             created_stickers.append(out_sticker)

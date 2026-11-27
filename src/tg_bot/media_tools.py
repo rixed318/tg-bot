@@ -475,15 +475,25 @@ def run_sticker_or_gif(source_media: Path, output_path: Path, mode: str) -> Path
 
 
 def make_clean_sticker_webp(
-    source_media: Path, output_path: Path, *, max_dim: int = 512, margin: int = 20
+    source_media: Path,
+    output_path: Path,
+    *,
+    max_dim: int = 512,
+    margin: int = 20,
+    cutout: bool = False,
 ) -> Path:
-    """Convert any image into a cleanly centered transparent Telegram WebP (512px sticker or 100px emoji)."""
-    from PIL import Image, ImageFilter, ImageOps
+    """Convert any image into a crisp centered Telegram WebP (512px sticker or 100px emoji).
+
+    Preserves the original image by default (with soft rounded corners) so non-portrait/meme
+    images are never erased; only runs background cutout when ``cutout=True`` and falls back
+    to the original if cutout removes >96% of the image.
+    """
+    from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     cutout_tmp = output_path.with_name(f"{output_path.stem}_cutout.png")
     work_src = source_media
-    if cleanup_cutout_helper_available():
+    if cutout and cleanup_cutout_helper_available():
         try:
             subprocess.run(
                 [
@@ -498,9 +508,13 @@ def make_clean_sticker_webp(
                 timeout=90,
             )
             if cutout_tmp.is_file() and cutout_tmp.stat().st_size > 0:
-                work_src = cutout_tmp
+                with Image.open(cutout_tmp) as chk:
+                    alpha = chk.convert("RGBA").getchannel("A")
+                    non_empty = sum(1 for v in alpha.getdata() if v > 20)
+                    if non_empty >= max(64, int(alpha.width * alpha.height * 0.04)):
+                        work_src = cutout_tmp
         except Exception:
-            LOGGER.warning("Cutout helper failed for %s, using centered crop", source_media.name)
+            LOGGER.warning("Cutout helper failed for %s, using original image", source_media.name)
 
     with Image.open(work_src) as im:
         im = ImageOps.exif_transpose(im).convert("RGBA")
@@ -520,6 +534,11 @@ def make_clean_sticker_webp(
             outline = Image.new("RGBA", im.size, (255, 255, 255, 235))
             outline.putalpha(dilated)
             canvas.paste(outline, (ox, oy), outline)
+        else:
+            radius = max(6, min(28, min(im.size) // 12))
+            mask = Image.new("L", im.size, 0)
+            ImageDraw.Draw(mask).rounded_rectangle((0, 0, im.width - 1, im.height - 1), radius=radius, fill=255)
+            im.putalpha(mask)
         canvas.paste(im, (ox, oy), im)
         canvas.save(output_path, format="WEBP", quality=92, method=6)
     if cutout_tmp.is_file():

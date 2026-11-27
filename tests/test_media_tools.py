@@ -59,6 +59,8 @@ def test_parses_camera_and_clean_sticker(tmp_path: Path) -> None:
     with Image.open(out) as st:
         assert st.size == (512, 512)
         assert st.format == "WEBP"
+        # Center pixel must remain opaque (original image not erased)
+        assert st.convert("RGBA").getpixel((256, 256))[3] == 255
 
 
 def test_parse_sticker_and_emoji_pack_directives(tmp_path: Path) -> None:
