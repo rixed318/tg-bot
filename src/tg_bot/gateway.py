@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from pathlib import Path
+from urllib.parse import quote
 
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.enums import ChatMemberStatus, ChatType, MessageEntityType
 from aiogram.filters import Command
@@ -18,6 +21,7 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
+    WebAppInfo,
 )
 
 try:
@@ -569,17 +573,33 @@ async def main() -> None:
                     "cmd:setpersona",
                 )
             elif sub == "games":
+                is_priv_chat = callback.message is not None and callback.message.chat.type == ChatType.PRIVATE
+                u = callback.from_user
+                arcade_url = (
+                    f"https://rixed.store/arcade/?uid={u.id}"
+                    f"&uname={quote(u.username or '')}&dname={quote(u.full_name or '')}"
+                )
+                html5_btn = (
+                    InlineKeyboardButton(text="🚀 Змейка 60 FPS (HTML5)", web_app=WebAppInfo(url=arcade_url))
+                    if is_priv_chat
+                    else InlineKeyboardButton(
+                        text="🚀 Змейка 60 FPS (HTML5)",
+                        url=f"https://t.me/{me.username}?start=snake",
+                    )
+                )
                 text = (
                     "🎮 <b>Игры в чате</b>\n\n"
-                    "• <b>🐍 Змейка</b> — управляй прямо в сообщении кнопками!\n"
+                    "• <b>🚀 Змейка 60 FPS (HTML5)</b> — плавный Canvas, свайпы, частицы и авто-запись в рейтинг!\n"
+                    "• <b>🐍 Змейка в чате</b> — быстрая игра прямо в сообщении.\n"
                     "• <b>💣 Сапёр 5×5</b> — открывай клетки без мин, +60 очков за победу.\n"
                     "• <b>🕵️ Мафия</b> — лобби для компании (роли в ЛС + дневное голосование).\n"
                     "• <b>🎲 Кости</b> — быстрая дуэль с таблицей рекордов по ID и @username."
                 )
                 kb = InlineKeyboardMarkup(
                     inline_keyboard=[
+                        [html5_btn],
                         [
-                            InlineKeyboardButton(text="🐍 Змейка", callback_data="cmd:game:snake:start"),
+                            InlineKeyboardButton(text="🐍 Змейка (чат)", callback_data="cmd:game:snake:start"),
                             InlineKeyboardButton(text="💣 Сапёр", callback_data="cmd:game:mines:start"),
                         ],
                         [
@@ -644,8 +664,52 @@ async def main() -> None:
             message.from_user.full_name,
             can_dm=True,
         )
+        arg = (message.text or "").split(maxsplit=1)[1] if len((message.text or "").split(maxsplit=1)) > 1 else ""
+        if arg.strip().lower() == "snake":
+            u = message.from_user
+            arcade_url = (
+                f"https://rixed.store/arcade/?uid={u.id}"
+                f"&uname={quote(u.username or '')}&dname={quote(u.full_name or '')}"
+            )
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="🚀 Запустить Змейку 60 FPS", web_app=WebAppInfo(url=arcade_url))],
+                    [InlineKeyboardButton(text="🏆 Топ Змейки", callback_data="cmd:game:top:snake")],
+                ]
+            )
+            await message.answer("🐍 <b>HTML5 Змейка готова к запуску!</b>", parse_mode="HTML", reply_markup=kb)
+            return
         await message.answer(
             "Личка подключена. Настройки доступны по команде /commands."
+        )
+
+    @router.message(F.web_app_data)
+    async def handle_webapp_data(message: Message) -> None:
+        if message.from_user is None or message.web_app_data is None:
+            return
+        try:
+            payload = json.loads(message.web_app_data.data)
+            score = int(payload.get("score") or 0)
+            game = str(payload.get("game") or "snake")
+        except Exception:
+            return
+        if score <= 0:
+            return
+        try:
+            from tg_bot import games as gmod
+        except ImportError:
+            import joke_bot_games as gmod
+        u = message.from_user
+        stats = gmod.record_game_score(
+            user_id=u.id,
+            username=u.username or "",
+            display_name=u.full_name or str(u.id),
+            game=game,
+            points=score,
+        )
+        await message.answer(
+            f"🐍 <b>Счёт сохранён!</b> +{score} очк. | Рекорд: <b>{stats['best_score']}</b>",
+            parse_mode="HTML",
         )
 
     @router.message(Command("status"))
@@ -829,11 +893,55 @@ async def main() -> None:
 
     dispatcher = Dispatcher()
     dispatcher.include_router(router)
+    arcade_runner = await _start_arcade_server()
     await bot.delete_webhook(drop_pending_updates=False)
     try:
         await dispatcher.start_polling(bot)
     finally:
+        await arcade_runner.cleanup()
         await bot.session.close()
+
+
+async def _start_arcade_server() -> web.AppRunner:
+    """Serve the <4KB HTML5 arcade mini-app and accept score submissions on 127.0.0.1:8120."""
+    async def handle_index(_request: web.Request) -> web.Response:
+        for cand in (
+            Path("/opt/rixed-joke-bot/miniapp_games.html"),
+            Path(__file__).with_name("miniapp_games.html"),
+        ):
+            if cand.is_file():
+                return web.Response(text=cand.read_text(encoding="utf-8"), content_type="text/html")
+        return web.Response(text="<h1>Arcade not found</h1>", status=404, content_type="text/html")
+
+    async def handle_score(request: web.Request) -> web.Response:
+        try:
+            data = await request.json()
+            uid = int(data.get("user_id") or 0)
+            score = int(data.get("score") or 0)
+            game = str(data.get("game") or "snake")[:24]
+            uname = str(data.get("username") or "")[:64]
+            dname = str(data.get("display_name") or uid)[:64]
+        except Exception:
+            return web.json_response({"ok": False}, status=400)
+        if uid <= 0 or score <= 0:
+            return web.json_response({"ok": False}, status=400)
+        try:
+            from tg_bot import games as gmod
+        except ImportError:
+            import joke_bot_games as gmod
+        stats = gmod.record_game_score(user_id=uid, username=uname, display_name=dname, game=game, points=score)
+        return web.json_response({"ok": True, **stats})
+
+    app = web.Application()
+    app.router.add_get("/", handle_index)
+    app.router.add_get("/index.html", handle_index)
+    app.router.add_post("/api/score", handle_score)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", int(os.environ.get("ARCADE_PORT", "8120")))
+    await site.start()
+    LOGGER.info("Arcade server listening on 127.0.0.1:%s", os.environ.get("ARCADE_PORT", "8120"))
+    return runner
 
 
 if __name__ == "__main__":
