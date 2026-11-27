@@ -69,6 +69,7 @@ from tg_bot.telegram_api import (
     send_video_note,
     send_voice,
 )
+from tg_bot.progress import MediaProgressTracker, detect_media_intent
 from tg_bot.transcribe import release_cached_model, transcribe_audio
 from tg_bot.trigger import (
     TriggerDecision,
@@ -896,16 +897,28 @@ def process_one(token: str) -> bool:
 
             # 4. Generate ONE consolidated spoken reply covering the triggered messages
             send_chat_action(token, task, "record_voice")
-            raw_reply = _ask_gemini_reply(
+            progress = MediaProgressTracker(
+                token,
                 task,
-                decision=decision,
-                unanswered=unanswered,
-                work_dir=work_dir,
-                attachment=attachment,
-                context_attachments=tuple(context_attachments),
+                work_dir,
+                detect_media_intent(str(task.get("text") or "")),
             )
+            progress.start()
+            try:
+                raw_reply = _ask_gemini_reply(
+                    task,
+                    decision=decision,
+                    unanswered=unanswered,
+                    work_dir=work_dir,
+                    attachment=attachment,
+                    context_attachments=tuple(context_attachments),
+                )
+            except Exception:
+                progress.stop()
+                raise
 
             if raw_reply == "[[skip]]" and not decision.explicit:
+                progress.stop()
                 remote_queue(
                     "complete",
                     "--ids",
@@ -1176,6 +1189,7 @@ def process_one(token: str) -> bool:
                     _schedule_drive_sync(force=True)
 
             # 6. Deliver exclusively as a Telegram VOICE message (+ optional requested media attachments)
+            progress.set_stage("deliver")
             anchor_msg_id = (
                 max(decision.target_message_ids)
                 if decision.target_message_ids
@@ -1243,6 +1257,7 @@ def process_one(token: str) -> bool:
             if copied_group_message_id is not None:
                 archive_text += f"\n[copied-to-group:{copied_group_message_id}]"
 
+            progress.stop()
             answered_watermark = max(
                 int(task["message_id"]),
                 max(decision.target_message_ids) if decision.target_message_ids else 0,
@@ -1266,6 +1281,8 @@ def process_one(token: str) -> bool:
             return True
 
     except Exception as error:
+        if "progress" in locals():
+            progress.stop()
         LOGGER.exception("Task %s failed", task_id)
         remote_queue("retry", "--ids", ",".join(claimed_ids), "--error-base64", encoded(str(error)))
         return True
