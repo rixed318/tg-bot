@@ -7,16 +7,18 @@
 <script async src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#090d14;color:#e6edf3;font:14px/1.4 system-ui;display:flex;flex-direction:column;align-items:center;padding:12px;user-select:none}
-.wrap{width:328px;display:flex;flex-direction:column;gap:10px}
+body{margin:0;background:#090d14;color:#e6edf3;font:14px/1.35 system-ui;display:flex;flex-direction:column;align-items:center;padding:12px;user-select:none}
+.wrap{width:332px;display:flex;flex-direction:column;gap:10px}
 .head{display:flex;justify-content:space-between;align-items:center}
 .badge{background:#1f2937;border:1px solid #374151;border-radius:99px;padding:3px 10px;font-size:12px;color:#93c5fd}
 .preview{background:#111827;border:2px solid #30363d;border-radius:16px;padding:12px;display:flex;flex-direction:column;align-items:center;gap:8px}
-.preview img{width:220px;height:220px;border-radius:14px;image-rendering:pixelated;background:#090d14;border:1px solid #30363d}
+.preview img{width:200px;height:200px;border-radius:14px;image-rendering:pixelated;background:#090d14;border:1px solid #30363d}
+.cats{display:flex;gap:4px;overflow-x:auto;padding-bottom:2px}
+.cats button{flex:0 0 auto;padding:7px 10px;font-size:12px}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
-button{background:#161b22;border:1px solid #30363d;color:#e6edf3;border-radius:10px;padding:9px 8px;font-weight:600;cursor:pointer;font-size:13px}
+button{background:#161b22;border:1px solid #30363d;color:#e6edf3;border-radius:10px;padding:8px 8px;font-weight:600;cursor:pointer;font-size:12.5px}
 button.on{background:#1f6feb;border-color:#58a6ff;color:#fff}
-.apply{background:#238636;border-color:#2ea043;color:#fff;padding:11px;font-size:15px}
+.apply{background:#238636;border-color:#2ea043;color:#fff;padding:11px;font-size:14.5px;width:100%}
 .shop{background:#161b22;border:1px dashed #30363d;border-radius:12px;padding:10px;font-size:12px;color:#9ca3af}
 #st{font-size:12px;color:#7ee787;text-align:center;min-height:16px}
 </style>
@@ -27,40 +29,73 @@ button.on{background:#1f6feb;border-color:#58a6ff;color:#fff}
   <div class="preview">
     <img id="img" src="" alt="preview">
     <b id="title">Ксюша · Обычный</b>
-    <button class="apply" style="width:100%" onclick="applyLook()">✨ Применить образ в боте</button>
-    <div id="st">Выбери персонажа и наряд</div>
+    <div id="params" style="font-size:11.5px;color:#9ca3af"></div>
+    <button class="apply" onclick="applyLook()">✨ Применить образ в боте</button>
+    <div id="st">Выбери категории внешности ниже</div>
   </div>
-  <div class="grid" id="chars"></div>
-  <b>👗 Наряды, волосы и аксессуары</b>
-  <div class="grid" id="outfits"></div>
+
+  <div class="cats" id="cats"></div>
+  <div class="grid" id="opts"></div>
+
   <div class="shop">
     <b>🛍 Магазин аватаров и голосов (скоро)</b><br>
-    • Кастомный 2D-персонаж под твою внешность<br>
-    • Обучение твоего голоса (`F5-TTS`) по записи<br>
-    • Эксклюзивные наряды, панамы и аксессуары
+    • Кастомное туловище, рост, вес и кожа<br>
+    • Обучение твоего голоса (<code>F5-TTS</code>) на заказ<br>
+    • Паки одежды, причёсок и аксессуаров
   </div>
 </div>
 <script>
 const tg=window.Telegram?.WebApp;if(tg){tg.ready();tg.expand()}
-const CHARS=[['ksyusha','Ксюша'],['anya','Аня'],['ruslan','Руслан'],['kaneki','Канеки'],['haldina','Халдина'],['serezha','Серёжа'],['artem','Артём'],['katya','Катя'],['karina','Карина'],['nikita','Никита']];
-const OUTFITS=[['quality','✨ Обычный'],['street','🧥 Streetwear'],['cyber','🤖 Cyberpunk'],['cozy','🧶 Cozy'],['buns','🎀 Пучки'],['beach','🏖 Купальник'],['panama','🧢 Панама'],['funny','🤪 Ржачный']];
-let curChar='ksyusha',curOut='quality';
+const CATS=[
+  ['char','👤 Персонаж'],
+  ['torso','👗 Туловище'],
+  ['hair','💇 Причёска'],
+  ['acc','🧢 Аксессуары'],
+  ['skin','🎨 Кожа'],
+  ['body','📏 Рост/Вес'],
+];
+const DATA={
+  char:[['ksyusha','Ксюша'],['anya','Аня'],['ruslan','Руслан'],['kaneki','Канеки'],['haldina','Халдина'],['serezha','Серёжа'],['artem','Артём'],['katya','Катя'],['karina','Карина'],['nikita','Никита']],
+  torso:[['quality','✨ Базовое'],['street','🧥 Streetwear'],['cyber','🤖 Cyberpunk'],['cozy','🧶 Cozy свитер'],['beach','🏖 Купальник'],['funny','🤪 Ржачный']],
+  hair:[['base','💇 Базовая'],['buns','🎀 Пучки (2D)']],
+  acc:[['none','➖ Без аксессуаров'],['panama','🧢 Панама + очки'],['headphones','🎧 Наушники']],
+  skin:[['fair','🤍 Светлая'],['warm','🍑 Тёплая'],['tan','☀️ Загар'],['pale','🌙 Бледная']],
+  body:[['slim_160','160см · Стройная'],['avg_170','170см · Средняя'],['fit_175','175см · Спортивная'],['tall_185','185см · Высокий']],
+};
+let tab='char',sel={char:'ksyusha',torso:'quality',hair:'base',acc:'none',skin:'fair',body:'avg_170'};
+
+function activeFolder(){
+  if(sel.acc==='panama') return `${sel.char}_panama`;
+  if(sel.hair==='buns') return `${sel.char}_buns`;
+  return sel.torso==='quality'?sel.char:`${sel.char}_${sel.torso}`;
+}
+function activeMode(){
+  if(sel.acc==='panama') return 'panama';
+  if(sel.hair==='buns') return 'buns';
+  return sel.torso;
+}
 function render(){
-  const cBox=document.getElementById('chars'),oBox=document.getElementById('outfits');
+  const cBox=document.getElementById('cats'),oBox=document.getElementById('opts');
   cBox.innerHTML='';oBox.innerHTML='';
-  CHARS.forEach(([id,nm])=>{const b=document.createElement('button');b.className=id===curChar?'on':'';b.textContent=nm;b.onclick=()=>{curChar=id;render()};cBox.appendChild(b)});
-  OUTFITS.forEach(([id,nm])=>{const b=document.createElement('button');b.className=id===curOut?'on':'';b.textContent=nm;b.onclick=()=>{curOut=id;render()};oBox.appendChild(b)});
-  const folder=curOut==='quality'?curChar:`${curChar}_${curOut}`;
-  const img=document.getElementById('img');
+  CATS.forEach(([id,nm])=>{const b=document.createElement('button');b.className=id===tab?'on':'';b.textContent=nm;b.onclick=()=>{tab=id;render()};cBox.appendChild(b)});
+  DATA[tab].forEach(([id,nm])=>{const b=document.createElement('button');b.className=sel[tab]===id?'on':'';b.textContent=nm;b.onclick=()=>{sel[tab]=id;render()};oBox.appendChild(b)});
+  const img=document.getElementById('img'),folder=activeFolder();
   img.src=`/arcade/avatar/${folder}/neutral_closed.png`;
-  img.onerror=()=>{img.src=`/arcade/avatar/${curChar}/neutral_closed.png`};
-  const cn=CHARS.find(x=>x[0]===curChar)[1],on=OUTFITS.find(x=>x[0]===curOut)[1];
-  document.getElementById('title').textContent=`${cn} · ${on}`;
+  img.onerror=()=>{img.src=`/arcade/avatar/${sel.char}/neutral_closed.png`};
+  const find=(k)=>DATA[k].find(x=>x[0]===sel[k])[1];
+  document.getElementById('title').textContent=`${find('char')} · ${find('torso')}`;
+  document.getElementById('params').textContent=`${find('hair')} | ${find('acc')} | ${find('skin')} | ${find('body')}`;
 }
 function applyLook(){
   const st=document.getElementById('st');st.textContent='Сохраняю...';
-  fetch('/arcade/api/set_visual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({persona:curChar,speech_display:curOut})})
-    .then(r=>r.json()).then(d=>{st.textContent=d.ok?'✅ Образ применён в боте!':'❌ Ошибка'})
+  fetch('/arcade/api/set_visual',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      persona:sel.char,speech_display:activeMode(),
+      avatar_hair:sel.hair,avatar_accessory:sel.acc,avatar_skin:sel.skin,
+      avatar_height:sel.body,avatar_build:sel.body,
+    })
+  }).then(r=>r.json()).then(d=>{st.textContent=d.ok?'✅ Образ сохранён в боте!':'❌ Ошибка'})
     .catch(()=>{st.textContent='❌ Ошибка сети'});
 }
 render();

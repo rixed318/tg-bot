@@ -80,8 +80,9 @@ AI_MODELS: list[tuple[str, str]] = [
     ("gemini-4-hydrogen-high", "Gemini 4 Hydrogen (High)"),
     ("gemini-4-hydrogen-medium", "Gemini 4 Hydrogen (Medium)"),
     ("gemini-3.8-flash-high", "Gemini 3.8 Flash (High)"),
+    ("grok-4.7", "Grok 4.7"),
+    ("grok-4.7-build-fast", "Grok 4.7 Fast"),
     ("grok-4.6", "Grok 4.6"),
-    ("grok-4.5", "Grok 4.5"),
 ]
 
 
@@ -1166,6 +1167,10 @@ async def _start_arcade_server() -> web.AppRunner:
             set_bot_setting("persona", persona)
         if mode in ("quality", "street", "cyber", "cozy", "buns", "beach", "panama", "funny"):
             set_bot_setting("speech_display", mode)
+        for key in ("avatar_hair", "avatar_accessory", "avatar_skin", "avatar_height", "avatar_build"):
+            val = str(data.get(key) or "").strip()
+            if val:
+                set_bot_setting(key, val[:40])
         return web.json_response({"ok": True})
 
     app = web.Application()

@@ -31,6 +31,7 @@ Telegram limits animated/video stickers and custom emojis to **<= 3.0 seconds**,
   - Outfits: `quality`, `street`, `cyber`, `cozy`, `beach` (swimwear + panama), `panama` (accessories), `buns` (hairstyle).
   - Each outfit has full lip-sync + blink + emotion set (`neutral_closed/half/open/blink`, `happy_open`, `laugh_open`, `sad_open`, `angry_open`, `shock_open`, `flirty_wink_open`).
 - **Avatar Studio Mini App (`/arcade/studio`):**
-  - Visual dress-up & customization Mini App: browse characters, outfits, hairstyles, accessories with live preview and 1-tap `Применить образ` (`POST /arcade/api/set_visual` -> updates `bot_settings`).
+  - Full category-based character customizer: **Персонаж**, **Туловище / Наряд**, **Причёска**, **Аксессуары**, **Цвет кожи**, **Рост и вес / телосложение** (`avatar_hair`, `avatar_accessory`, `avatar_skin`, `avatar_height`, `avatar_build` saved in `bot_settings` via `POST /arcade/api/set_visual`).
+  - Future modular sprite compositing: separate base body/torso/head/hair/skin-tone/accessory layers rendered dynamically per character.
 - **Avatar & Voice Marketplace (Магазин аватаров и голосов на заказ):**
   - Ready-to-use 2D character packs, custom outfit/accessory drops, and bespoke voice fine-tuning (`F5-TTS` from 8–10 min recording) + custom 2D persona generation on demand (Telegram Stars / TON Connect).
